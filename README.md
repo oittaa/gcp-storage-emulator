@@ -66,4 +66,53 @@ This can also be achieved (e.g. during tests) by hitting the `/wipe` endpoint
 
 ## Docker
 
-TODO
+Build the Docker image.
+
+```bash
+docker build -t gcp-storage-emulator .
+```
+
+Run the container. Directory `cloudstorage` will be used for the emulated storage.
+
+```
+docker run -d \
+  -p 8080:8080 \
+  --name gcp-storage-emulator \
+  -v "$(pwd)"/cloudstorage:/app/.cloudstorage \
+  gcp-storage-emulator
+```
+
+### Example
+
+Create a test file `emulator-test.py`.
+
+```python
+from google.auth.credentials import AnonymousCredentials
+from google.cloud import storage, exceptions
+
+BUCKET = "test-bucket"
+
+client = storage.Client(
+    credentials=AnonymousCredentials(),
+    project="test",
+)
+
+try:
+    bucket = client.get_bucket(BUCKET)
+except exceptions.NotFound:
+    bucket = client.bucket(BUCKET)
+    bucket = client.create_bucket(bucket)
+blob = bucket.blob("key1")
+blob.upload_from_string("test1")
+blob = bucket.blob("key2")
+blob.upload_from_string("test2")
+for blob in bucket.list_blobs():
+    print(f"Blob: {blob.name}")
+```
+
+Run the follofing commands to insert test data into the emulated storage.
+
+```bash
+export STORAGE_EMULATOR_HOST=http://localhost:8080
+python3 emulator-test.py
+```
