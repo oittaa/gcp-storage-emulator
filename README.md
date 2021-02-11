@@ -1,5 +1,8 @@
 # Local Emulator for Google Cloud Storage
 
+![GCP Storage Emulator](https://github.com/oittaa/gcp-storage-emulator/workflows/GCP%20Storage%20Emulator/badge.svg)
+[![codecov](https://codecov.io/gh/oittaa/gcp-storage-emulator/branch/main/graph/badge.svg?token=GpiSgoXsGL)](https://codecov.io/gh/oittaa/gcp-storage-emulator)
+
 Google doesn't (yet) ship an emulator for the Cloud Storage API like they do for
 Cloud Datastore.
 
@@ -23,7 +26,7 @@ having to connect to the production Storage APIs.
 Start the emulator with:
 
 ```bash
-$ gcp-storage-emulator start --port=9090
+gcp-storage-emulator start --port=9090
 ```
 
 By default, data is stored under `$PWD/.cloudstorage`. You can configure the folder using the env variables `STORAGE_BASE` (default `./`) and `STORAGE_DIR` (default `.cloudstorage`).
@@ -33,7 +36,7 @@ If you wish to run the emulator in a testing environment or if you don't want to
 If you're using the Google client library (e.g. `google-cloud-storage` for Python) then you can set the `STORAGE_EMULATOR_HOST` environment variable to tell the library to connect to your emulator endpoint rather than the standard `https://storage.googleapis.com`, e.g.:
 
 ```bash
-$ export STORAGE_EMULATOR_HOST=http://localhost:9090
+export STORAGE_EMULATOR_HOST=http://localhost:9090
 ```
 
 
@@ -42,7 +45,7 @@ $ export STORAGE_EMULATOR_HOST=http://localhost:9090
 You can wipe the data by running
 
 ```bash
-$ gcp-storage-emulator wipe
+gcp-storage-emulator wipe
 ```
 
 ## Python APIs
@@ -66,7 +69,13 @@ This can also be achieved (e.g. during tests) by hitting the `/wipe` endpoint
 
 ## Docker
 
-Build the Docker image.
+Pull the Docker image.
+
+```bash
+`docker pull oittaa/gcp-storage-emulator`
+```
+
+Or build it.
 
 ```bash
 docker build -t gcp-storage-emulator .
@@ -110,7 +119,7 @@ for blob in bucket.list_blobs():
     print(f"Blob: {blob.name}")
 ```
 
-Run the follofing commands to insert test data into the emulated storage.
+Run the following commands to insert test data into the emulated storage.
 
 ```bash
 export STORAGE_EMULATOR_HOST=http://localhost:8080
