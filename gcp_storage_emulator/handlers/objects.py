@@ -6,12 +6,9 @@ from base64 import b64encode
 from datetime import datetime, timezone
 from http import HTTPStatus
 
+import crc32c
 from gcp_storage_emulator.exceptions import Conflict, NotFound
 
-try:
-    import crc32c
-except ImportError:
-    crc32c = None
 
 _WRITABLE_FIELDS = (
     "cacheControl",
@@ -54,9 +51,6 @@ def _handle_conflict(response, err):
 
 
 def _crc32c(content):
-    if crc32c is None:
-        # Fake value, if crc32c is not installed
-        return "lj+ong=="
     if isinstance(content, str):
         content = content.encode()
     val = crc32c.crc32c(content)

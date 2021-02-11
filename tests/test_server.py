@@ -5,7 +5,6 @@ from tempfile import NamedTemporaryFile
 from unittest import TestCase as BaseTestCase
 
 import fs
-import pytest
 import requests
 from google.api_core.exceptions import BadRequest, Conflict, NotFound
 
@@ -368,7 +367,6 @@ class ObjectsTests(ServerBaseCase):
         with self.assertRaises(BadRequest):
             blob.upload_from_string(content)
 
-    @pytest.mark.skipif(crc32c is None, reason='no crc32c support in this platform')
     def test_valid_crc32c_hash(self):
         content = b"hello world"
         crc32c_hash = "yZRlqg=="
@@ -380,7 +378,6 @@ class ObjectsTests(ServerBaseCase):
         self.assertEqual(download_blob.download_as_bytes(), content)
         self.assertEqual(download_blob.crc32c, crc32c_hash)
 
-    @pytest.mark.skipif(crc32c is None, reason='no crc32c support in this platform')
     def test_invalid_crc32c_hash(self):
         content = b"Hello World"
         bucket = self._client.create_bucket("testbucket")
