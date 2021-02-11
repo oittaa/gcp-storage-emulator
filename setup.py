@@ -48,7 +48,7 @@ setup(
         "crc32c==2.2",
         "fs==2.4.12",
         "google-cloud-storage==1.36.0",
-        "requests==2.23.0",
+        "requests==2.25.1",
     ],
     python_requires=">=3.6",
 )
