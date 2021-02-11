@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+
+# This script runs the `gcp-storage-emulator` runner using the system environment Python binary.
+
+from gcp_storage_emulator.__main__ import main
+
+if __name__ == '__main__':
+    main()
