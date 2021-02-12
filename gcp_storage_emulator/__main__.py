@@ -13,9 +13,9 @@ DEFAULT_PORT = 9023
 DEFAULT_HOST = "localhost"
 
 
-def run_server(host, port, memory=False, default_bucket=None):
+def get_server(host, port, memory=False, default_bucket=None):
     server = create_server(host, port, memory, default_bucket)
-    return server.run()
+    return server
 
 
 def wipe():
@@ -54,9 +54,9 @@ def prepare_args_parser():
     return parser, subparsers
 
 
-def main():
+def main(args=sys.argv[1:], test_mode=False):
     parser, subparsers = prepare_args_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(args)
     if args.subcommand not in subparsers.choices.keys():
         parser.print_usage()
         sys.exit(1)
@@ -81,7 +81,10 @@ def main():
         root.setLevel(logging.CRITICAL)
     else:
         root.setLevel(logging.DEBUG)
-    sys.exit(run_server(args.host, args.port, args.no_store_on_disk, args.default_bucket))
+    server = get_server(args.host, args.port, args.no_store_on_disk, args.default_bucket)
+    if test_mode:
+        return server
+    sys.exit(server.run())
 
 
 if __name__ == "__main__":

@@ -72,7 +72,7 @@ This can also be achieved (e.g. during tests) by hitting the `/wipe` endpoint
 Pull the Docker image.
 
 ```bash
-`docker pull oittaa/gcp-storage-emulator`
+docker pull oittaa/gcp-storage-emulator
 ```
 
 Or build it.
