@@ -52,7 +52,7 @@ jobs:
         path: /tmp/.buildx-cache
         key: ${{ runner.os }}-build-x
         restore-keys: |
-          ${{ runnes.os }}-build-x
+          ${{ runner.os }}-build-x
     - name: Build and push
       uses: docker/build-push-action@v2
       with:
@@ -87,7 +87,7 @@ jobs:
         path: /tmp/.buildx-cache
         key: ${{ runner.os }}-build-x
         restore-keys: |
-          ${{ runnes.os }}-build-x
+          ${{ runner.os }}-build-x
     - name: Login to DockerHub
       uses: docker/login-action@v1
       with:
