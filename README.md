@@ -16,7 +16,7 @@ having to connect to the production Storage APIs.
 
 ## Installation
 
-`pip install .`
+`pip install gcp-storage-emulator`
 
 
 ## CLI Usage
@@ -29,7 +29,7 @@ Start the emulator with:
 gcp-storage-emulator start --port=9090
 ```
 
-By default, data is stored under `$PWD/.cloudstorage`. You can configure the folder using the env variables `STORAGE_BASE` (default `./`) and `STORAGE_DIR` (default `.cloudstorage`).
+By default, data is stored under `./.cloudstorage`. You can configure the folder using the env variables `STORAGE_BASE` (default `./`) and `STORAGE_DIR` (default `.cloudstorage`).
 
 If you wish to run the emulator in a testing environment or if you don't want to persist any data, you can use the `--no-store-on-disk` parameter. For tests, you might want to consider starting up the server from your code (see the [Python APIs](#python-apis))
 
@@ -62,9 +62,47 @@ server.start()
 server.stop()
 ```
 
-You can wipe the data (e.g. for text execution) by calling `server.wipe()`
+You can wipe the data by calling `server.wipe()`
 
 This can also be achieved (e.g. during tests) by hitting the `/wipe` endpoint
+
+#### Example
+
+Create a test file `emulator-test.py`.
+
+```python
+from google.auth.credentials import AnonymousCredentials
+from google.cloud import storage
+from gcp_storage_emulator.server import create_server
+
+PORT = 8080
+BUCKET = "test-bucket"
+
+server = create_server("localhost", PORT, in_memory=True)
+server.start()
+
+client = storage.Client(
+    credentials=AnonymousCredentials(),
+    project="test",
+)
+bucket = client.bucket(BUCKET)
+bucket = client.create_bucket(bucket)
+blob = bucket.blob("blob1")
+blob.upload_from_string("test1")
+blob = bucket.blob("blob2")
+blob.upload_from_string("test2")
+for blob in bucket.list_blobs():
+    content = blob.download_as_bytes()
+    print("Blob [{}]: {}".format(blob.name, content))
+server.stop()
+```
+
+Run the following commands to test the emulated storage.
+
+```bash
+export STORAGE_EMULATOR_HOST=http://localhost:8080
+python3 emulator-test.py
+```
 
 
 ## Docker
@@ -75,13 +113,7 @@ Pull the Docker image.
 docker pull oittaa/gcp-storage-emulator
 ```
 
-Or build it.
-
-```bash
-docker build -t gcp-storage-emulator .
-```
-
-Run the container. Directory `cloudstorage` will be used for the emulated storage.
+Run the container. Here the directory `$(pwd)/cloudstorage` will be used for the emulated storage.
 
 ```
 docker run -d \
@@ -89,39 +121,4 @@ docker run -d \
   --name gcp-storage-emulator \
   -v "$(pwd)"/cloudstorage:/app/.cloudstorage \
   gcp-storage-emulator
-```
-
-### Example
-
-Create a test file `emulator-test.py`.
-
-```python
-from google.auth.credentials import AnonymousCredentials
-from google.cloud import storage, exceptions
-
-BUCKET = "test-bucket"
-
-client = storage.Client(
-    credentials=AnonymousCredentials(),
-    project="test",
-)
-
-try:
-    bucket = client.get_bucket(BUCKET)
-except exceptions.NotFound:
-    bucket = client.bucket(BUCKET)
-    bucket = client.create_bucket(bucket)
-blob = bucket.blob("key1")
-blob.upload_from_string("test1")
-blob = bucket.blob("key2")
-blob.upload_from_string("test2")
-for blob in bucket.list_blobs():
-    print(f"Blob: {blob.name}")
-```
-
-Run the following commands to insert test data into the emulated storage.
-
-```bash
-export STORAGE_EMULATOR_HOST=http://localhost:8080
-python3 emulator-test.py
 ```
