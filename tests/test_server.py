@@ -11,11 +11,6 @@ from google.api_core.exceptions import BadRequest, Conflict, NotFound
 from gcp_storage_emulator.server import create_server
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
 
-try:
-    import crc32c
-except ImportError:
-    crc32c = None
-
 
 def _get_storage_client(http):
     """Gets a python storage client"""
