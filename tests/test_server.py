@@ -239,7 +239,7 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.get_blob(file_name)
         self.assertEqual(blob.name, file_name)
 
-    def test_get_nonexistant(self):
+    def test_get_nonexistent(self):
         bucket = self._client.create_bucket("testbucket")
         res = bucket.get_blob("idonotexist")
 
@@ -422,6 +422,13 @@ class ObjectsTests(ServerBaseCase):
 
             self.assertIsNone(bucket.get_blob("cantouchme.txt"))
             self.assertFalse(pwd.exists("bucket_name/canttouchme.txt"))
+
+    def test_delete_nonexistent_object(self):
+        bucket = self._client.create_bucket("bucket_name")
+        blob = bucket.blob("this-should-not-exists.txt")
+
+        with self.assertRaises(NotFound):
+            blob.delete()
 
     def test_create_within_directory(self):
         bucket = self._client.create_bucket("bucket_name")

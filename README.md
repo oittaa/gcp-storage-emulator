@@ -113,12 +113,12 @@ Pull the Docker image.
 docker pull oittaa/gcp-storage-emulator
 ```
 
-Run the container. Here the directory `$(pwd)/cloudstorage` will be used for the emulated storage.
+Inside the container instance, the value of the `PORT` environment variable always reflects the port to which requests are sent. It defaults to `8080`. The directory used for the emulated storage is located in `/app/.cloudstorage`. In the following example the host's directory `$(pwd)/cloudstorage` will be bound to the emulated storage.
 
 ```
 docker run -d \
   -p 8080:8080 \
   --name gcp-storage-emulator \
   -v "$(pwd)"/cloudstorage:/app/.cloudstorage \
-  gcp-storage-emulator
+  oittaa/gcp-storage-emulator
 ```
