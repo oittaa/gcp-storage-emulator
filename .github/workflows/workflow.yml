@@ -50,9 +50,9 @@ jobs:
       uses: actions/cache@v2
       with:
         path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-build-x
+        key: ${{ runner.os }}-build-x-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-build-x
+          ${{ runner.os }}-build-x-
     - name: Build
       uses: docker/build-push-action@v2
       with:
@@ -72,24 +72,23 @@ jobs:
     - name: Check Docker logs
       run: docker logs gcp-storage-emulator
     - name: Docker container down
-      run: docker logs gcp-storage-emulator
+      run: docker stop gcp-storage-emulator
 
   publish:
     if: ${{ github.event_name == 'push' }}
     needs: [build, docker]
     runs-on: ubuntu-latest
     steps:
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v1
+    - uses: actions/checkout@v2
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
     - name: Cache Docker layers
       uses: actions/cache@v2
       with:
         path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-build-x
+        key: ${{ runner.os }}-build-x-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-build-x
+          ${{ runner.os }}-build-x-
     - name: Login to DockerHub
       uses: docker/login-action@v1
       with:
@@ -99,7 +98,6 @@ jobs:
       id: docker_build
       uses: docker/build-push-action@v2
       with:
-        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/ppc64le,linux/s390x
         push: true
         tags: oittaa/gcp-storage-emulator:latest
         cache-from: type=local,src=/tmp/.buildx-cache
