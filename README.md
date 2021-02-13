@@ -1,6 +1,6 @@
 # Local Emulator for Google Cloud Storage
 
-![GCP Storage Emulator](https://github.com/oittaa/gcp-storage-emulator/workflows/GCP%20Storage%20Emulator/badge.svg)
+![CI](https://github.com/oittaa/gcp-storage-emulator/workflows/CI/badge.svg)
 [![codecov](https://codecov.io/gh/oittaa/gcp-storage-emulator/branch/main/graph/badge.svg?token=GpiSgoXsGL)](https://codecov.io/gh/oittaa/gcp-storage-emulator)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
