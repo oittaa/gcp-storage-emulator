@@ -13,8 +13,10 @@ def _get_storage_client(http):
     # Cloud storage uses environment variables to configure api endpoints for
     # file upload - which is read at module import time
     from google.cloud import storage
+
     if os.getenv("DEBUG"):
         from http import client as http_client
+
         http_client.HTTPConnection.debuglevel = 5
     return storage.Client(
         project="[PROJECT]",
@@ -24,10 +26,9 @@ def _get_storage_client(http):
 
 
 class ServerBaseCase(BaseTestCase):
-
     @classmethod
     def setUpClass(cls):
-        cls._server = main(['start', '--port=9099'], True)
+        cls._server = main(["start", "--port=9099"], True)
         cls._server.start()
 
     @classmethod
@@ -50,13 +51,13 @@ class MainHttpEndpointsTest(ServerBaseCase):
         url = self._url("/")
         response = requests.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, 'OK'.encode('utf-8'))
+        self.assertEqual(response.content, "OK".encode("utf-8"))
 
     def test_wipe(self):
         url = self._url("/wipe")
         response = requests.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, 'OK'.encode('utf-8'))
+        self.assertEqual(response.content, "OK".encode("utf-8"))
 
     def test_download_by_url(self):
         """ Objects should be downloadable over HTTP from the emulator client. """
@@ -68,10 +69,10 @@ class MainHttpEndpointsTest(ServerBaseCase):
         url = self._url("/anotherbucket/something.txt")
         response = requests.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, content.encode('utf-8'))
+        self.assertEqual(response.content, content.encode("utf-8"))
 
     def test_path_does_not_exist(self):
         url = self._url("/zzzzz-does-not-exist")
         response = requests.get(url)
         self.assertEqual(response.status_code, 501)
-        self.assertEqual(response.content, ''.encode('utf-8'))
+        self.assertEqual(response.content, "".encode("utf-8"))

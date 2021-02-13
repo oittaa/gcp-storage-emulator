@@ -36,26 +36,29 @@ HANDLERS = (
     (r"^{}/b$".format(settings.API_ENDPOINT), {GET: buckets.ls, POST: buckets.insert}),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)$".format(settings.API_ENDPOINT),
-        {GET: buckets.get, DELETE: buckets.delete}),
+        {GET: buckets.get, DELETE: buckets.delete},
+    ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o$".format(settings.API_ENDPOINT),
-        {GET: objects.ls}
+        {GET: objects.ls},
     ),
-
     (
-        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/copyTo/b/".format(settings.API_ENDPOINT)
+        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/copyTo/b/".format(
+            settings.API_ENDPOINT
+        )
         + r"(?P<dest_bucket_name>[-.\w]+)/o/(?P<dest_object_id>.*[^/]+)$",
-        {POST: objects.copy}
+        {POST: objects.copy},
     ),
     (
-        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$".format(settings.API_ENDPOINT),
-        {GET: objects.get, DELETE: objects.delete, PATCH: objects.patch}
+        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$".format(
+            settings.API_ENDPOINT
+        ),
+        {GET: objects.get, DELETE: objects.delete, PATCH: objects.patch},
     ),
-
     # Non-default API endpoints
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o$".format(settings.UPLOAD_API_ENDPOINT),
-        {POST: objects.insert, PUT: objects.upload_partial}
+        {POST: objects.insert, PUT: objects.upload_partial},
     ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$".format(
@@ -63,21 +66,24 @@ HANDLERS = (
         ),
         {GET: objects.download},
     ),
-
     # Internal API, not supported by the real GCS
     (r"^/$", {GET: _health_check}),  # Health check endpoint
     (r"^/wipe$", {GET: _wipe_data}),  # Wipe all data
-
     # Public file serving, same as object.download
     (r"^/(?P<bucket_name>[-.\w]+)/(?P<object_id>.*[^/]+)$", {GET: objects.download}),
 )
 
 
 def _read_data(request_handler):
-    if not request_handler.headers["Content-Length"] or not request_handler.headers["Content-Type"]:
+    if (
+        not request_handler.headers["Content-Length"]
+        or not request_handler.headers["Content-Type"]
+    ):
         return None
 
-    raw_data = request_handler.rfile.read(int(request_handler.headers["Content-Length"]))
+    raw_data = request_handler.rfile.read(
+        int(request_handler.headers["Content-Length"])
+    )
 
     content_type = request_handler.headers["Content-Type"]
 
@@ -109,7 +115,9 @@ class Request(object):
         self._path = request_handler.path
         self._request_handler = request_handler
         self._server_address = request_handler.server.server_address
-        self._base_url = "http://{}:{}".format(self._server_address[0], self._server_address[1])
+        self._base_url = "http://{}:{}".format(
+            self._server_address[0], self._server_address[1]
+        )
         self._full_url = self._base_url + self._path
         self._parsed_url = urlparse(self._full_url)
         self._query = parse_qs(self._parsed_url.query)
@@ -170,7 +178,9 @@ class Response(object):
         self._content = ""
 
     def write(self, content):
-        logger.warning("[RESPONSE] Content handled as string, should be handled as stream")
+        logger.warning(
+            "[RESPONSE] Content handled as string, should be handled as stream"
+        )
         self._content += content
 
     def write_file(self, content, content_type="application/octet-stream"):
@@ -222,15 +232,19 @@ class Router(object):
                 try:
                     handler(request, response, self._request_handler.storage)
                 except Exception as e:
-                    logger.error("An error has occurred while running the handler for {} {}".format(
-                        request.method,
-                        request.full_url,
-                    ))
+                    logger.error(
+                        "An error has occurred while running the handler for {} {}".format(
+                            request.method,
+                            request.full_url,
+                        )
+                    )
                     logger.error(e)
                     raise e
                 break
         else:
-            logger.error("Method not implemented: {} - {}".format(request.method, request.path))
+            logger.error(
+                "Method not implemented: {} - {}".format(request.method, request.path)
+            )
             response.status = HTTPStatus.NOT_IMPLEMENTED
 
         response.close()
@@ -276,7 +290,9 @@ class APIThread(threading.Thread):
         self._storage = storage
 
     def run(self):
-        self._httpd = server.HTTPServer((self._host, self._port), partial(RequestHandler, self._storage))
+        self._httpd = server.HTTPServer(
+            (self._host, self._port), partial(RequestHandler, self._storage)
+        )
         self.is_running.set()
         self._httpd.serve_forever()
 
@@ -292,7 +308,9 @@ class Server(object):
     def __init__(self, host, port, in_memory=False, default_bucket=None):
         self._storage = Storage(use_memory_fs=in_memory)
         if default_bucket:
-            logging.debug('[SERVER] Creating default bucket "{}"'.format(default_bucket))
+            logging.debug(
+                '[SERVER] Creating default bucket "{}"'.format(default_bucket)
+            )
             buckets.create_bucket(default_bucket, self._storage)
         self._api = APIThread(host, port, self._storage)
 

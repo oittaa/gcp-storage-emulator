@@ -25,20 +25,14 @@ _WRITABLE_FIELDS = (
 
 BAD_REQUEST = {
     "error": {
-        "errors": [
-            {
-                "domain": "global",
-                "reason": "invalid",
-                "message": None
-            }
-        ],
+        "errors": [{"domain": "global", "reason": "invalid", "message": None}],
         "code": 400,
-        "message": None
+        "message": None,
     }
 }
 
-MD5_CHECKSUM_ERROR = "Provided MD5 hash \"{}\" doesn't match calculated MD5 hash \"{}\"."
-CRC32C_CHECKSUM_ERROR = "Provided CRC32C \"{}\" doesn't match calculated CRC32C \"{}\"."
+MD5_CHECKSUM_ERROR = 'Provided MD5 hash "{}" doesn\'t match calculated MD5 hash "{}".'
+CRC32C_CHECKSUM_ERROR = 'Provided CRC32C "{}" doesn\'t match calculated CRC32C "{}".'
 
 
 def _handle_conflict(response, err):
@@ -54,13 +48,13 @@ def _crc32c(content):
     if isinstance(content, str):
         content = content.encode()
     val = crc32c.crc32c(content)
-    return b64encode(val.to_bytes(4, byteorder='big')).decode('ascii')
+    return b64encode(val.to_bytes(4, byteorder="big")).decode("ascii")
 
 
 def _md5(content):
     if isinstance(content, str):
         content = content.encode()
-    return b64encode(hashlib.md5(content).digest()).decode('ascii')
+    return b64encode(hashlib.md5(content).digest()).decode("ascii")
 
 
 def _checksums(content, file_obj):
@@ -94,7 +88,9 @@ def _patch_object(obj, metadata):
     return obj
 
 
-def _make_object_resource(base_url, bucket_name, object_name, content_type, content_length, metadata=None):
+def _make_object_resource(
+    base_url, bucket_name, object_name, content_type, content_length, metadata=None
+):
     time_id = math.floor(time.time())
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
@@ -120,7 +116,7 @@ def _make_object_resource(base_url, bucket_name, object_name, content_type, cont
             time_id,
         ),
         "crc32c": None,
-        "etag": None
+        "etag": None,
     }
     obj = _patch_object(obj, metadata)
     return obj
@@ -150,8 +146,10 @@ def _multipart_upload(request, response, storage):
 
 
 def _create_resumable_upload(request, response, storage):
-    content_type = request.get_header('x-upload-content-type', 'application/octet-stream')
-    content_length = request.get_header('x-upload-content-length', None)
+    content_type = request.get_header(
+        "x-upload-content-type", "application/octet-stream"
+    )
+    content_length = request.get_header("x-upload-content-length", None)
     obj = _make_object_resource(
         request.base_url,
         request.params["bucket_name"],
@@ -166,9 +164,11 @@ def _create_resumable_upload(request, response, storage):
         obj,
     )
 
-    encoded_id = urllib.parse.urlencode({
-        'upload_id': id,
-    })
+    encoded_id = urllib.parse.urlencode(
+        {
+            "upload_id": id,
+        }
+    )
     response["Location"] = request.full_url + "&{}".format(encoded_id)
 
 
@@ -194,7 +194,9 @@ def upload_partial(request, response, storage, *args, **kwargs):
         obj = storage.get_resumable_file_obj(upload_id)
         obj = _checksums(request.data, obj)
         obj["size"] = str(len(request.data))
-        obj = storage.create_file(obj["bucket"], obj["name"], request.data, obj, upload_id)
+        obj = storage.create_file(
+            obj["bucket"], obj["name"], request.data, obj, upload_id
+        )
         return response.json(obj)
     except Conflict as err:
         _handle_conflict(response, err)
@@ -202,7 +204,9 @@ def upload_partial(request, response, storage, *args, **kwargs):
 
 def get(request, response, storage, *args, **kwargs):
     try:
-        obj = storage.get_file_obj(request.params["bucket_name"], request.params["object_id"])
+        obj = storage.get_file_obj(
+            request.params["bucket_name"], request.params["object_id"]
+        )
         response.json(obj)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
@@ -211,21 +215,22 @@ def get(request, response, storage, *args, **kwargs):
 def ls(request, response, storage, *args, **kwargs):
     bucket_name = request.params["bucket_name"]
     prefix = request.query.get("prefix")[0] if request.query.get("prefix") else None
-    delimiter = request.query.get('delimiter')[0] if request.query.get("delimiter") else None
+    delimiter = (
+        request.query.get("delimiter")[0] if request.query.get("delimiter") else None
+    )
     try:
         files = storage.get_file_list(bucket_name, prefix, delimiter)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
     else:
-        response.json({
-            "kind": "storage#object",
-            "items": files
-        })
+        response.json({"kind": "storage#object", "items": files})
 
 
 def copy(request, response, storage, *args, **kwargs):
     try:
-        obj = storage.get_file_obj(request.params["bucket_name"], request.params["object_id"])
+        obj = storage.get_file_obj(
+            request.params["bucket_name"], request.params["object_id"]
+        )
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
         return
@@ -242,7 +247,12 @@ def copy(request, response, storage, *args, **kwargs):
     file = storage.get_file(request.params["bucket_name"], request.params["object_id"])
     try:
         dest_obj = _checksums(file, dest_obj)
-        storage.create_file(request.params["dest_bucket_name"], request.params["dest_object_id"], file, dest_obj)
+        storage.create_file(
+            request.params["dest_bucket_name"],
+            request.params["dest_object_id"],
+            file,
+            dest_obj,
+        )
         response.json(dest_obj)
     except Conflict as err:
         _handle_conflict(response, err)
@@ -250,8 +260,12 @@ def copy(request, response, storage, *args, **kwargs):
 
 def download(request, response, storage, *args, **kwargs):
     try:
-        file = storage.get_file(request.params["bucket_name"], request.params["object_id"])
-        obj = storage.get_file_obj(request.params["bucket_name"], request.params["object_id"])
+        file = storage.get_file(
+            request.params["bucket_name"], request.params["object_id"]
+        )
+        obj = storage.get_file_obj(
+            request.params["bucket_name"], request.params["object_id"]
+        )
         response.write_file(file, content_type=obj.get("contentType"))
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
@@ -266,9 +280,13 @@ def delete(request, response, storage, *args, **kwargs):
 
 def patch(request, response, storage, *args, **kwargs):
     try:
-        obj = storage.get_file_obj(request.params["bucket_name"], request.params["object_id"])
+        obj = storage.get_file_obj(
+            request.params["bucket_name"], request.params["object_id"]
+        )
         obj = _patch_object(obj, request.data)
-        storage.patch_object(request.params["bucket_name"], request.params["object_id"], obj)
+        storage.patch_object(
+            request.params["bucket_name"], request.params["object_id"], obj
+        )
         response.json(obj)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND

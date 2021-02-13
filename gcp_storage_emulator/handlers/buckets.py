@@ -13,25 +13,21 @@ CONFLICT = {
             {
                 "domain": "global",
                 "reason": "conflict",
-                "message": "You already own this bucket. Please select another name."
+                "message": "You already own this bucket. Please select another name.",
             }
         ],
         "code": 409,
-        "message": "You already own this bucket. Please select another name."
+        "message": "You already own this bucket. Please select another name.",
     }
 }
 
 BAD_REQUEST = {
     "error": {
         "errors": [
-            {
-                "domain": "global",
-                "reason": "invalid",
-                "message": "Empty bucket name"
-            }
+            {"domain": "global", "reason": "invalid", "message": "Empty bucket name"}
         ],
         "code": 400,
-        "message": "Empty bucket name"
+        "message": "Empty bucket name",
     }
 }
 
@@ -48,17 +44,13 @@ def _make_bucket_resource(bucket_name):
         "updated": now,
         "metageneration": "1",
         "iamConfiguration": {
-            "bucketPolicyOnly": {
-                "enabled": False
-            },
-            "uniformBucketLevelAccess": {
-                "enabled": False
-            }
+            "bucketPolicyOnly": {"enabled": False},
+            "uniformBucketLevelAccess": {"enabled": False},
         },
         "location": "US",
         "locationType": "multi-region",
         "storageClass": "STANDARD",
-        "etag": "CAE="
+        "etag": "CAE=",
     }
 
 
@@ -72,10 +64,12 @@ def get(request, response, storage, *args, **kwargs):
 
 def ls(request, response, storage, *args, **kwargs):
     logger.info("[BUCKETS] List received")
-    response.json({
-        "kind": "storage#buckets",
-        "items": list(storage.buckets.values()),
-    })
+    response.json(
+        {
+            "kind": "storage#buckets",
+            "items": list(storage.buckets.values()),
+        }
+    )
 
 
 def create_bucket(name, storage):
@@ -90,7 +84,9 @@ def create_bucket(name, storage):
 def insert(request, response, storage, *args, **kwargs):
     name = request.data.get("name")
     if name:
-        logger.debug("[BUCKETS] Received request to create bucket with name {}".format(name))
+        logger.debug(
+            "[BUCKETS] Received request to create bucket with name {}".format(name)
+        )
         bucket = create_bucket(name, storage)
         if not bucket:
             response.status = HTTPStatus.CONFLICT

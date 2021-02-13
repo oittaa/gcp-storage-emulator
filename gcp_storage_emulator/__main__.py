@@ -38,18 +38,28 @@ def prepare_args_parser():
         "-H", "--host", help="the host to run the server on", default=DEFAULT_HOST
     )
     start.add_argument(
-        "--default-bucket", help="The default bucket. If provided, bucket will be created automatically"
+        "--default-bucket",
+        help="The default bucket. If provided, bucket will be created automatically",
     )
-    start.add_argument("-q", "--quiet", action="store_true", default=False, help="only outputs critical level logging")
-    start.add_argument("-M", "--no-store-on-disk", action="store_true", default=False, help="use in-memory storage")
+    start.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        default=False,
+        help="only outputs critical level logging",
+    )
+    start.add_argument(
+        "-M",
+        "--no-store-on-disk",
+        action="store_true",
+        default=False,
+        help="use in-memory storage",
+    )
 
     subparsers.add_parser("wipe", help="Wipe the local data")
 
     create_bucket = subparsers.add_parser("create_bucket", help="create bucket")
-    create_bucket.add_argument(
-        "-n", "--name",
-        help="Name of the new bucket"
-    )
+    create_bucket.add_argument("-n", "--name", help="Name of the new bucket")
 
     return parser, subparsers
 
@@ -62,7 +72,9 @@ def main(args=sys.argv[1:], test_mode=False):
         sys.exit(1)
 
     if args.subcommand == "wipe":
-        answer = input("This operation will IRREVERSIBLY DELETE all your data. Do you wish to proceed? [y/N] ").lower()
+        answer = input(
+            "This operation will IRREVERSIBLY DELETE all your data. Do you wish to proceed? [y/N] "
+        ).lower()
         if answer in ("y", "ye", "yes"):
             sys.exit(wipe())
         else:
@@ -81,7 +93,9 @@ def main(args=sys.argv[1:], test_mode=False):
         root.setLevel(logging.CRITICAL)
     else:
         root.setLevel(logging.DEBUG)
-    server = get_server(args.host, args.port, args.no_store_on_disk, args.default_bucket)
+    server = get_server(
+        args.host, args.port, args.no_store_on_disk, args.default_bucket
+    )
     if test_mode:
         return server
     sys.exit(server.run())

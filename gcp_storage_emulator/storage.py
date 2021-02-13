@@ -113,11 +113,15 @@ class Storage(object):
 
         bucket_objects = self.objects.get(bucket_name, {})
         if prefix:
+            prefix_len = len(prefix) if delimiter is None else len(prefix + delimiter)
             # TODO: Still need to implement the last part of the doc string above to
             # TODO: populate blobs.prefixes when using a delimiter.
-            return list(file_object for file_name, file_object in bucket_objects.items()
-                        if file_name.startswith(prefix)
-                        and (not delimiter or delimiter not in file_name[len(prefix+delimiter):]))
+            return list(
+                file_object
+                for file_name, file_object in bucket_objects.items()
+                if file_name.startswith(prefix)
+                and (not delimiter or delimiter not in file_name[prefix_len:])
+            )
         else:
             return list(bucket_objects.values())
 
@@ -279,11 +283,13 @@ class Storage(object):
         resumable_ids = [
             file_id
             for (file_id, file_obj) in self.resumable.items()
-            if file_obj.get('bucket') == bucket_name
+            if file_obj.get("bucket") == bucket_name
         ]
 
         if len(resumable_ids) != 0:
-            raise Conflict("Bucket '{}' has pending upload sessions".format(bucket_name))
+            raise Conflict(
+                "Bucket '{}' has pending upload sessions".format(bucket_name)
+            )
 
         del self.buckets[bucket_name]
 
@@ -294,7 +300,11 @@ class Storage(object):
         try:
             self.objects[bucket_name][file_name]
         except KeyError:
-            raise NotFound("Object with name '{}' does not exist in bucket '{}'".format(bucket_name, file_name))
+            raise NotFound(
+                "Object with name '{}' does not exist in bucket '{}'".format(
+                    bucket_name, file_name
+                )
+            )
 
         del self.objects[bucket_name][file_name]
 
@@ -321,8 +331,8 @@ class Storage(object):
         self.resumable = {}
 
         try:
-            self._fs.remove('.meta')
-            for path in self._fs.listdir('.'):
+            self._fs.remove(".meta")
+            for path in self._fs.listdir("."):
                 self._fs.removetree(path)
         except ResourceNotFound as e:
             logger.warning(e)

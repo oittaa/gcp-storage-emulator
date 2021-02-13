@@ -19,8 +19,10 @@ def _get_storage_client(http):
     # Cloud storage uses environment variables to configure api endpoints for
     # file upload - which is read at module import time
     from google.cloud import storage
+
     if os.getenv("DEBUG"):
         from http import client as http_client
+
         http_client.HTTPConnection.debuglevel = 5
     return storage.Client(
         project="[PROJECT]",
@@ -30,7 +32,6 @@ def _get_storage_client(http):
 
 
 class ServerBaseCase(BaseTestCase):
-
     @classmethod
     def setUpClass(cls):
         cls._server = create_server("localhost", 9023, in_memory=False)
@@ -47,7 +48,6 @@ class ServerBaseCase(BaseTestCase):
 
 
 class BucketsTests(BaseTestCase):
-
     @classmethod
     def setUpClass(cls):
         cls._server = create_server("localhost", 9023, in_memory=False)
@@ -133,7 +133,8 @@ class BucketsTests(BaseTestCase):
         self.assertIsNone(blob)
 
         with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
-            self.assertFalse(pwd.exists('bucket_name'))
+            self.assertFalse(pwd.exists("bucket_name"))
+
     # TODO: test delete-force
 
 
@@ -144,7 +145,9 @@ class DefaultBucketTests(BaseTestCase):
         return super().tearDown()
 
     def test_bucket_created(self):
-        self._server = create_server("localhost", 9023, in_memory=True, default_bucket="example.appspot.com")
+        self._server = create_server(
+            "localhost", 9023, in_memory=True, default_bucket="example.appspot.com"
+        )
         self._server.start()
         self._session = requests.Session()
         self._client = _get_storage_client(self._session)
@@ -152,7 +155,6 @@ class DefaultBucketTests(BaseTestCase):
 
 
 class ObjectsTests(ServerBaseCase):
-
     def test_upload_from_string(self):
         content = "this is the content of the file\n"
         bucket = self._client.create_bucket("testbucket")
@@ -164,7 +166,9 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(read_content, content)
 
     def test_upload_from_text_file(self):
-        text_test = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_text.txt')
+        text_test = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "test_text.txt"
+        )
         bucket = self._client.create_bucket("testbucket")
         blob = bucket.blob("test_text.txt")
         with open(text_test, "rb") as file:
@@ -178,7 +182,9 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(read_content, expected_content)
 
     def test_upload_from_bin_file(self):
-        test_binary = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_binary.png')
+        test_binary = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "test_binary.png"
+        )
         bucket = self._client.create_bucket("testbucket")
         blob = bucket.blob("binary.png")
         with open(test_binary, "rb") as file:
@@ -192,14 +198,12 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(read_content, expected_content)
 
     def test_upload_from_bin_file_cr_lf(self):
-        content = b'\r\rheeeeei\r\n'
+        content = b"\r\rheeeeei\r\n"
         test_binary = BytesIO(content)
         bucket = self._client.create_bucket("testbucket")
         blob = bucket.blob("binary_cr.png")
 
-        blob.upload_from_file(
-            test_binary, size=len(content)
-        )
+        blob.upload_from_file(test_binary, size=len(content))
 
         with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
             read_content = pwd.readbytes("testbucket/binary_cr.png")
@@ -207,7 +211,9 @@ class ObjectsTests(ServerBaseCase):
         self.assertEqual(read_content, content)
 
     def test_upload_from_file_name(self):
-        test_binary = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_binary.png')
+        test_binary = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "test_binary.png"
+        )
         file_name = "test_binary.png"
 
         bucket = self._client.create_bucket("testbucket")
@@ -260,7 +266,7 @@ class ObjectsTests(ServerBaseCase):
 
         blob = bucket.get_blob("iexist")
         fetched_content = blob.download_as_bytes()
-        self.assertEqual(fetched_content, content.encode('utf-8'))
+        self.assertEqual(fetched_content, content.encode("utf-8"))
 
     def test_set_content_encoding(self):
         content = "The quick brown fox jumps over the lazy dog\n"
@@ -275,7 +281,7 @@ class ObjectsTests(ServerBaseCase):
     def test_set_metadata(self):
         content = "The quick brown fox jumps over the lazy dog\n"
         bucket = self._client.create_bucket("testbucket")
-        metadata = {"Color": 'Pink'}
+        metadata = {"Color": "Pink"}
 
         blob = bucket.blob("testblob")
         blob.metadata = metadata
@@ -382,7 +388,9 @@ class ObjectsTests(ServerBaseCase):
             blob.upload_from_string(content)
 
     def test_download_binary_to_file(self):
-        test_binary = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_binary.png')
+        test_binary = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "test_binary.png"
+        )
         bucket = self._client.create_bucket("testbucket")
 
         blob = bucket.blob("binary.png")
@@ -397,7 +405,9 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(fetched_file.getvalue(), file.read())
 
     def test_download_text_to_file(self):
-        test_text = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_text.txt')
+        test_text = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "test_text.txt"
+        )
         bucket = self._client.create_bucket("testbucket")
 
         blob = bucket.blob("text.txt")
@@ -451,9 +461,7 @@ class ObjectsTests(ServerBaseCase):
             self.assertTrue(pwd.exists("bucket_name/this/is/a/nested/file.txt"))
 
     def _assert_blob_list(self, expected, actual):
-        self.assertEqual(
-            [b.name for b in expected],
-            [b.name for b in actual])
+        self.assertEqual([b.name for b in expected], [b.name for b in actual])
 
     def test_list_blobs_on_nonexistent_bucket(self):
         blobs = self._client.list_blobs("bucket_name")
@@ -494,7 +502,7 @@ class ObjectsTests(ServerBaseCase):
         blob_3 = bucket.blob("b/c.txt")
         blob_3.upload_from_string("text")
 
-        blobs = self._client.list_blobs(bucket, prefix='a')
+        blobs = self._client.list_blobs(bucket, prefix="a")
 
         self._assert_blob_list(blobs, [blob_1, blob_2])
 
@@ -513,7 +521,7 @@ class ObjectsTests(ServerBaseCase):
         blob_4 = bucket.blob("b/c.txt")
         blob_4.upload_from_string("text")
 
-        blobs = self._client.list_blobs(bucket, prefix='a', delimiter='/')
+        blobs = self._client.list_blobs(bucket, prefix="a", delimiter="/")
 
         self._assert_blob_list(blobs, [blob_1, blob_2])
 
@@ -553,11 +561,10 @@ class HttpEndpointsTest(ServerBaseCase):
         url = self._url("/anotherbucket/something.txt")
         response = requests.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, content.encode('utf-8'))
+        self.assertEqual(response.content, content.encode("utf-8"))
 
     def test_download_file_within_folder(self):
-        """ Cloud Storage allows folders within buckets, so the download URL should allow for this.
-        """
+        """Cloud Storage allows folders within buckets, so the download URL should allow for this."""
         content = "Here is some content"
         bucket = self._client.create_bucket("yetanotherbucket")
         blob = bucket.blob("folder/contain~ing/something~v-1.0.α.txt")
@@ -566,4 +573,4 @@ class HttpEndpointsTest(ServerBaseCase):
         url = self._url("/yetanotherbucket/folder/contain~ing/something~v-1.0.α.txt")
         response = requests.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, content.encode('utf-8'))
+        self.assertEqual(response.content, content.encode("utf-8"))

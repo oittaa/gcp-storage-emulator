@@ -6,17 +6,18 @@ PACKAGES = find_packages()
 
 DESCRIPTION = "A stub emulator for the Google Cloud Storage API"
 URL = "https://github.com/oittaa/gcp-storage-emulator"
-LONG_DESCRIPTION = open(os.path.join(os.path.dirname(__file__), 'README.md')).read()
+LONG_DESCRIPTION = open(os.path.join(os.path.dirname(__file__), "README.md")).read()
 
 AUTHOR = "Eero Vuojolahti"
 AUTHOR_EMAIL = "contact@oittaa.com"
-GITHUB_REF = os.environ.get('GITHUB_REF')
+GITHUB_REF = os.environ.get("GITHUB_REF")
 PREFIX = "refs/tags/"
 
 if GITHUB_REF and GITHUB_REF.startswith(PREFIX):
-    VERSION = GITHUB_REF[len(PREFIX):]
+    prefix_len = len(PREFIX)
+    VERSION = GITHUB_REF[prefix_len:]
 else:
-    VERSION = '0.0.0.dev0'
+    VERSION = "0.0.0.dev0"
 
 setup(
     name=NAME,
@@ -29,18 +30,22 @@ setup(
     author_email=AUTHOR_EMAIL,
     packages=find_packages(),
     zip_safe=False,
-    keywords=["Google Cloud Storage", "Google App Engine", "Google Cloud Platform", "GCS", "GAE", "GCP"],
+    keywords=[
+        "Google Cloud Storage",
+        "Google App Engine",
+        "Google Cloud Platform",
+        "GCS",
+        "GAE",
+        "GCP",
+    ],
     classifiers=[
-        'Development Status :: 3 - Alpha',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: BSD License',
-        'Operating System :: OS Independent',
-        'Programming Language :: Python',
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: BSD License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python",
     ],
-    scripts=[
-        "bin/gcp-storage-emulator",
-        "bin/gcp-storage-emulator.py"
-    ],
+    scripts=["bin/gcp-storage-emulator", "bin/gcp-storage-emulator.py"],
     setup_requires=[
         "wheel",
     ],

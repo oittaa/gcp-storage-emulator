@@ -24,9 +24,12 @@ class StorageOSFSTests(BaseTestCase):
         buckets = {"key": "a"}
 
         with open(meta_path, "w") as file:
-            json.dump({
-                "buckets": buckets,
-            }, file)
+            json.dump(
+                {
+                    "buckets": buckets,
+                },
+                file,
+            )
 
         # Force a re-read from file, this is usually done in the constructor
         self.storage._read_config_from_file()
@@ -37,9 +40,12 @@ class StorageOSFSTests(BaseTestCase):
         objects = {"key": {"inner_key": "a"}}
 
         with open(meta_path, "w") as file:
-            json.dump({
-                "objects": objects,
-            }, file)
+            json.dump(
+                {
+                    "objects": objects,
+                },
+                file,
+            )
 
         # Force a re-read from file, this is usually done in the constructor
         self.storage._read_config_from_file()
@@ -71,7 +77,9 @@ class StorageOSFSTests(BaseTestCase):
             self.assertEqual(meta["buckets"]["a_bucket"], bucket_obj)
 
     def test_create_file_stores_content(self):
-        test_file = os.path.join(os.getcwd(), STORAGE_BASE, STORAGE_DIR, "a_bucket_name", "file_name.txt")
+        test_file = os.path.join(
+            os.getcwd(), STORAGE_BASE, STORAGE_DIR, "a_bucket_name", "file_name.txt"
+        )
         content = "Łukas is a great developer".encode("utf8")
         file_obj = {}
         self.storage.create_file("a_bucket_name", "file_name.txt", content, file_obj)
@@ -87,11 +95,15 @@ class StorageOSFSTests(BaseTestCase):
         meta_path = _get_meta_path()
         with open(meta_path, "r") as file:
             meta = json.load(file)
-            self.assertEqual(meta["objects"]["a_bucket_name"]["file_name.txt"], file_obj)
+            self.assertEqual(
+                meta["objects"]["a_bucket_name"]["file_name.txt"], file_obj
+            )
 
     def test_create_resumable_upload_stores_meta(self):
         file_obj = {"key": "val"}
-        file_id = self.storage.create_resumable_upload("a_bucket_name", "file_name.png", file_obj)
+        file_id = self.storage.create_resumable_upload(
+            "a_bucket_name", "file_name.png", file_obj
+        )
         meta_path = _get_meta_path()
         with open(meta_path, "r") as file:
             meta = json.load(file)
@@ -99,17 +111,27 @@ class StorageOSFSTests(BaseTestCase):
 
     def test_file_ids_dont_clash(self):
         file_obj = {"key": "val"}
-        file_id_1 = self.storage.create_resumable_upload("a_bucket_name", "file_name.png", file_obj)
-        file_id_2 = self.storage.create_resumable_upload("a_bucket_name", "file_name.png", file_obj)
+        file_id_1 = self.storage.create_resumable_upload(
+            "a_bucket_name", "file_name.png", file_obj
+        )
+        file_id_2 = self.storage.create_resumable_upload(
+            "a_bucket_name", "file_name.png", file_obj
+        )
         self.assertNotEqual(file_id_1, file_id_2)
 
     def test_create_file_for_resumable_upload(self):
-        test_file = os.path.join(os.getcwd(), STORAGE_BASE, STORAGE_DIR, "a_bucket_name", "file_name.png")
+        test_file = os.path.join(
+            os.getcwd(), STORAGE_BASE, STORAGE_DIR, "a_bucket_name", "file_name.png"
+        )
         content = b"Randy is also a great developer"
         file_obj = {"bucket": "a_bucket_name", "name": "file_name.png"}
-        file_id = self.storage.create_resumable_upload("a_bucket_name", "file_name.png", file_obj)
+        file_id = self.storage.create_resumable_upload(
+            "a_bucket_name", "file_name.png", file_obj
+        )
         self.assertEqual(self.storage.get_resumable_file_obj(file_id), file_obj)
-        self.storage.create_file(file_obj["bucket"], file_obj["name"], content, file_obj, file_id)
+        self.storage.create_file(
+            file_obj["bucket"], file_obj["name"], content, file_obj, file_id
+        )
 
         with open(test_file, "rb") as file:
             read_content = file.read()
@@ -117,7 +139,9 @@ class StorageOSFSTests(BaseTestCase):
 
         with open(_get_meta_path(), "r") as file:
             meta = json.load(file)
-            self.assertEqual(meta["objects"]["a_bucket_name"]["file_name.png"], file_obj)
+            self.assertEqual(
+                meta["objects"]["a_bucket_name"]["file_name.png"], file_obj
+            )
             self.assertEqual(meta["resumable"], {})
 
     def test_delete_bucket_stores_meta(self):
@@ -129,4 +153,4 @@ class StorageOSFSTests(BaseTestCase):
         meta_path = _get_meta_path()
         with open(meta_path, "r") as file:
             meta = json.load(file)
-            self.assertIsNone(meta["buckets"].get('a_bucket'))
+            self.assertIsNone(meta["buckets"].get("a_bucket"))
