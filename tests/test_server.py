@@ -521,9 +521,10 @@ class ObjectsTests(ServerBaseCase):
         blob_4 = bucket.blob("b/c.txt")
         blob_4.upload_from_string("text")
 
-        blobs = self._client.list_blobs(bucket, prefix="a", delimiter="/")
+        blobs = self._client.list_blobs(bucket, prefix="a/", delimiter="/")
 
         self._assert_blob_list(blobs, [blob_1, blob_2])
+        self.assertEqual(blobs.prefixes, {"a/b/"})
 
     def test_bucket_copy_existing(self):
         bucket = self._client.create_bucket("bucket_name")

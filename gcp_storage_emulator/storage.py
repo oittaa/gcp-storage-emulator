@@ -111,19 +111,29 @@ class Storage(object):
         if bucket_name not in self.buckets:
             raise NotFound
 
+        prefix_len = 0
+        prefixes = []
         bucket_objects = self.objects.get(bucket_name, {})
         if prefix:
-            prefix_len = len(prefix) if delimiter is None else len(prefix + delimiter)
-            # TODO: Still need to implement the last part of the doc string above to
-            # TODO: populate blobs.prefixes when using a delimiter.
-            return list(
+            prefix_len = len(prefix)
+            objs = list(
                 file_object
                 for file_name, file_object in bucket_objects.items()
                 if file_name.startswith(prefix)
                 and (not delimiter or delimiter not in file_name[prefix_len:])
             )
         else:
-            return list(bucket_objects.values())
+            objs = list(bucket_objects.values())
+        if delimiter:
+            prefixes = list(
+                file_name[:prefix_len]
+                + file_name[prefix_len:].split(delimiter, 1)[0]
+                + delimiter
+                for file_name in list(bucket_objects)
+                if file_name.startswith(prefix or "")
+                and delimiter in file_name[prefix_len:]
+            )
+        return objs, prefixes
 
     def create_bucket(self, bucket_name, bucket_obj):
         """Create a bucket object representation and save it to the current fs

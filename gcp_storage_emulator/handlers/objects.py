@@ -219,11 +219,11 @@ def ls(request, response, storage, *args, **kwargs):
         request.query.get("delimiter")[0] if request.query.get("delimiter") else None
     )
     try:
-        files = storage.get_file_list(bucket_name, prefix, delimiter)
+        files, prefixes = storage.get_file_list(bucket_name, prefix, delimiter)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
     else:
-        response.json({"kind": "storage#object", "items": files})
+        response.json({"kind": "storage#object", "prefixes": prefixes, "items": files})
 
 
 def copy(request, response, storage, *args, **kwargs):
