@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 import sys
 
 from gcp_storage_emulator.handlers.buckets import create_bucket
@@ -9,8 +10,8 @@ from gcp_storage_emulator.server import create_server
 from gcp_storage_emulator.storage import Storage
 
 # One after gcloud-task-emulator one
-DEFAULT_PORT = 9023
-DEFAULT_HOST = "localhost"
+DEFAULT_PORT = int(os.environ.get("PORT", 9023))
+DEFAULT_HOST = os.environ.get("HOST", "localhost")
 
 
 def get_server(host, port, memory=False, default_bucket=None):
