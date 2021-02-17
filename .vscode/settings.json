@@ -1,0 +1,6 @@
+{
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true,
+    "python.linting.flake8Args": ["--max-complexity=10", "--max-line-length=127"],
+    "python.linting.enabled": true
+}
