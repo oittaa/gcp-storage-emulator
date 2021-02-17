@@ -258,6 +258,47 @@ def copy(request, response, storage, *args, **kwargs):
         _handle_conflict(response, err)
 
 
+def compose(request, response, storage, *args, **kwargs):
+    content_type = None
+    dest_file = b""
+    try:
+        dest_properties = request.data["destination"]
+        for src_obj in request.data["sourceObjects"]:
+            if content_type is None:
+                temp = storage.get_file_obj(
+                    request.params["bucket_name"], src_obj["name"]
+                )
+                content_type = temp["contentType"]
+            dest_file += storage.get_file(
+                request.params["bucket_name"], src_obj["name"]
+            )
+
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
+        return
+
+    dest_obj = _make_object_resource(
+        request.base_url,
+        request.params["bucket_name"],
+        request.params["object_id"],
+        content_type,
+        len(dest_file),
+        dest_properties,
+    )
+
+    try:
+        dest_obj = _checksums(dest_file, dest_obj)
+        storage.create_file(
+            request.params["bucket_name"],
+            request.params["object_id"],
+            dest_file,
+            dest_obj,
+        )
+        response.json(dest_obj)
+    except Conflict as err:
+        _handle_conflict(response, err)
+
+
 def download(request, response, storage, *args, **kwargs):
     try:
         file = storage.get_file(

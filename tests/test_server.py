@@ -545,6 +545,41 @@ class ObjectsTests(ServerBaseCase):
         with self.assertRaises(NotFound):
             bucket.rename_blob(blob_1, "c/d.txt")
 
+    def test_compose_create_new_blob(self):
+        bucket = self._client.create_bucket("compose_test")
+        data_1 = b"AAA\n"
+        source_1 = bucket.blob("source-1")
+        source_1.upload_from_string(data_1, content_type="text/plain")
+
+        data_2 = b"BBB\n"
+        source_2 = bucket.blob("source-2")
+        source_2.upload_from_string(data_2, content_type="text/plain")
+
+        destination = bucket.blob("destination")
+        destination.content_type = "text/somethingelse"
+        destination.compose([source_1, source_2])
+
+        composed = destination.download_as_bytes()
+        self.assertEqual(composed, data_1 + data_2)
+        self.assertEqual(destination.content_type, "text/somethingelse")
+
+    def test_compose_wo_content_type_set(self):
+        bucket = self._client.create_bucket("compose_test")
+        data_1 = b"AAA\n"
+        source_1 = bucket.blob("source-1")
+        source_1.upload_from_string(data_1, content_type="text/plain")
+
+        data_2 = b"BBB\n"
+        source_2 = bucket.blob("source-2")
+        source_2.upload_from_string(data_2, content_type="text/plain")
+
+        destination = bucket.blob("destination")
+        destination.compose([source_1, source_2])
+
+        composed = destination.download_as_bytes()
+        self.assertEqual(composed, data_1 + data_2)
+        self.assertEqual(destination.content_type, "text/plain")
+
 
 class HttpEndpointsTest(ServerBaseCase):
     """ Tests for the HTTP endpoints defined by server.HANDLERS. """

@@ -50,6 +50,12 @@ HANDLERS = (
         {POST: objects.copy},
     ),
     (
+        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/compose$".format(
+            settings.API_ENDPOINT
+        ),
+        {POST: objects.compose},
+    ),
+    (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$".format(
             settings.API_ENDPOINT
         ),
