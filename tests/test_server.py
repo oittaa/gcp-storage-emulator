@@ -580,6 +580,15 @@ class ObjectsTests(ServerBaseCase):
         self.assertEqual(composed, data_1 + data_2)
         self.assertEqual(destination.content_type, "text/plain")
 
+    def test_compose_nonexistent(self):
+        bucket = self._client.create_bucket("compose_test")
+        source_1 = bucket.blob("source-1")
+        source_2 = bucket.blob("source-2")
+
+        destination = bucket.blob("destination")
+        with self.assertRaises(NotFound):
+            destination.compose([source_1, source_2])
+
 
 class HttpEndpointsTest(ServerBaseCase):
     """ Tests for the HTTP endpoints defined by server.HANDLERS. """
