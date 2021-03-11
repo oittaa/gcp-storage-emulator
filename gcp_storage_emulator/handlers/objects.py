@@ -386,7 +386,14 @@ def batch(request, response, storage, *args, **kwargs):
                 response.write(json.dumps(resp_data))
                 response.write("\r\n\r\n")
         if method == "DELETE":
-            resp_data = _delete(storage, bucket_name, object_id)
+            if object_id:
+                resp_data = _delete(storage, bucket_name, object_id)
+            else:
+                try:
+                    storage.delete_bucket(bucket_name)
+                    resp_data = True
+                except (Conflict, NotFound):
+                    pass
             if resp_data:
                 response.write("HTTP/1.1 204 No Content\r\n")
                 response.write("Content-Type: application/json; charset=UTF-8\r\n")

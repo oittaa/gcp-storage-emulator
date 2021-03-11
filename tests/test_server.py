@@ -594,7 +594,6 @@ class ObjectsTests(ServerBaseCase):
         bucket = self._client.create_bucket("batchbucket")
         blob = bucket.blob("testblob-name1.txt")
         blob.upload_from_string(content)
-        self.assertEqual(blob.custom_time, None)
         with self._client.batch():
             bucket.delete_blob("testblob-name1.txt")
         self.assertIsNone(bucket.get_blob("testblob-name1.txt"))
@@ -674,6 +673,17 @@ class ObjectsTests(ServerBaseCase):
         self.assertIsNone(bucket.get_blob("testblob-name2.txt"))
         blob = bucket.get_blob("testblob-name3.txt")
         self.assertEqual(blob.custom_time, now)
+
+    def test_batch_delete_buckets(self):
+        bucket1 = self._client.create_bucket("batchbucket1")
+        bucket2 = self._client.create_bucket("batchbucket2")
+        with self._client.batch():
+            bucket1.delete()
+            bucket2.delete()
+        with self.assertRaises(NotFound):
+            self._client.get_bucket("batchbucket1")
+        with self.assertRaises(NotFound):
+            self._client.get_bucket("batchbucket2")
 
 
 class HttpEndpointsTest(ServerBaseCase):
