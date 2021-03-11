@@ -1,5 +1,9 @@
 import hashlib
+import json
+import logging
 import math
+import secrets
+import string
 import time
 import urllib.parse
 from base64 import b64encode
@@ -9,6 +13,7 @@ from http import HTTPStatus
 import crc32c
 from gcp_storage_emulator.exceptions import Conflict, NotFound
 
+logger = logging.getLogger("api.object")
 
 _WRITABLE_FIELDS = (
     "cacheControl",
@@ -30,6 +35,15 @@ BAD_REQUEST = {
         "message": None,
     }
 }
+
+NOT_FOUND = {
+    "error": {
+        "errors": [{"domain": "global", "reason": "notFound", "message": None}],
+        "code": 404,
+        "message": None,
+    }
+}
+
 
 MD5_CHECKSUM_ERROR = 'Provided MD5 hash "{}" doesn\'t match calculated MD5 hash "{}".'
 CRC32C_CHECKSUM_ERROR = 'Provided CRC32C "{}" doesn\'t match calculated CRC32C "{}".'
@@ -170,6 +184,27 @@ def _create_resumable_upload(request, response, storage):
         }
     )
     response["Location"] = request.full_url + "&{}".format(encoded_id)
+
+
+def _delete(storage, bucket_name, object_id):
+    try:
+        storage.delete_file(bucket_name, object_id)
+        return True
+    except NotFound:
+        return False
+
+
+def _patch(storage, bucket_name, object_id, metadata):
+    try:
+        obj = storage.get_file_obj(bucket_name, object_id)
+        obj = _patch_object(obj, metadata)
+        storage.patch_object(bucket_name, object_id, obj)
+        return obj
+    except NotFound:
+        logger.error(
+            "Could not patch {}/{}: with {}".format(bucket_name, object_id, metadata)
+        )
+        return None
 
 
 def insert(request, response, storage, *args, **kwargs):
@@ -313,21 +348,56 @@ def download(request, response, storage, *args, **kwargs):
 
 
 def delete(request, response, storage, *args, **kwargs):
-    try:
-        storage.delete_file(request.params["bucket_name"], request.params["object_id"])
-    except NotFound:
+    if not _delete(storage, request.params["bucket_name"], request.params["object_id"]):
         response.status = HTTPStatus.NOT_FOUND
 
 
 def patch(request, response, storage, *args, **kwargs):
-    try:
-        obj = storage.get_file_obj(
-            request.params["bucket_name"], request.params["object_id"]
-        )
-        obj = _patch_object(obj, request.data)
-        storage.patch_object(
-            request.params["bucket_name"], request.params["object_id"], obj
-        )
+    obj = _patch(
+        storage,
+        request.params["bucket_name"],
+        request.params["object_id"],
+        request.data,
+    )
+    if obj:
         response.json(obj)
-    except NotFound:
+    else:
         response.status = HTTPStatus.NOT_FOUND
+
+
+def batch(request, response, storage, *args, **kwargs):
+    boundary = "batch_" + "".join(
+        secrets.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits)
+        for _ in range(32)
+    )
+    response["Content-Type"] = "multipart/mixed; boundary={}".format(boundary)
+    for item in request.data:
+        resp_data = None
+        response.write("--{}\r\nContent-Type: application/http\r\n".format(boundary))
+        method = item.get("method")
+        bucket_name = item.get("bucket_name")
+        object_id = item.get("object_id")
+        meta = item.get("meta")
+        if method == "PATCH":
+            resp_data = _patch(storage, bucket_name, object_id, meta)
+            if resp_data:
+                response.write("HTTP/1.1 200 OK\r\n")
+                response.write("Content-Type: application/json; charset=UTF-8\r\n")
+                response.write(json.dumps(resp_data))
+                response.write("\r\n\r\n")
+        if method == "DELETE":
+            resp_data = _delete(storage, bucket_name, object_id)
+            if resp_data:
+                response.write("HTTP/1.1 204 No Content\r\n")
+                response.write("Content-Type: application/json; charset=UTF-8\r\n")
+        if not resp_data:
+            msg = "No such object: {}/{}".format(bucket_name, object_id)
+            resp_data = NOT_FOUND
+            resp_data["error"]["message"] = msg
+            resp_data["error"]["errors"][0]["message"] = msg
+            response.write("HTTP/1.1 404 Not Found\r\n")
+            response.write("Content-Type: application/json; charset=UTF-8\r\n\r\n")
+            response.write(json.dumps(resp_data))
+            response.write("\r\n\r\n")
+
+    response.write("--{}--".format(boundary))
