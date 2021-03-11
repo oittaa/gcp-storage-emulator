@@ -662,6 +662,7 @@ class ObjectsTests(ServerBaseCase):
         blob.custom_time = now
         with self._client.batch():
             bucket.delete_blob("testblob-name1.txt")
+            bucket.delete_blob("this-does-not-exist.txt")
             bucket.delete_blob("testblob-name2.txt")
             blob.patch()
         self.assertIsNone(bucket.get_blob("testblob-name1.txt"))
