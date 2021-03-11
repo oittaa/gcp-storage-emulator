@@ -72,12 +72,46 @@ HANDLERS = (
         ),
         {GET: objects.download},
     ),
+    (
+        r"^{}$".format(settings.BATCH_API_ENDPOINT),
+        {POST: objects.batch},
+    ),
     # Internal API, not supported by the real GCS
     (r"^/$", {GET: _health_check}),  # Health check endpoint
     (r"^/wipe$", {GET: _wipe_data}),  # Wipe all data
     # Public file serving, same as object.download
     (r"^/(?P<bucket_name>[-.\w]+)/(?P<object_id>.*[^/]+)$", {GET: objects.download}),
 )
+
+BATCH_HANDLERS = (
+    r"^(?P<method>[\w]+).*{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>[^\?]+[^/])([\?].*)?$".format(
+        settings.API_ENDPOINT
+    ),
+    r"^Content-Type:\s*(?P<content_type>[-.\w/]+)$",
+)
+
+
+def _parse_batch_item(item):
+    parsed_params = {}
+    content_reached = None
+    partial_content = ""
+    current_content = item.get_payload()
+    for line in current_content.splitlines():
+        if not content_reached:
+            if not line:
+                content_reached = True
+            else:
+                for regex in BATCH_HANDLERS:
+                    pattern = re.compile(regex)
+                    match = pattern.fullmatch(line)
+                    if match:
+                        for k, v in match.groupdict().items():
+                            parsed_params[k] = unquote(v)
+        else:
+            partial_content += line
+    if partial_content and parsed_params.get("content_type") == "application/json":
+        parsed_params["meta"] = json.loads(partial_content)
+    return parsed_params
 
 
 def _read_data(request_handler):
@@ -103,6 +137,15 @@ def _read_data(request_handler):
 
         msg = parser.parsebytes(header + raw_data)
         payload = msg.get_payload()
+
+        if content_type.startswith("multipart/mixed"):
+            # Batch https://cloud.google.com/storage/docs/json_api/v1/how-tos/batch
+            rv = list()
+            for item in payload:
+                parsed_params = _parse_batch_item(item)
+                rv.append(parsed_params)
+
+            return rv
 
         # For multipart upload, google API expect the first item to be a json-encoded
         # object, and the second (and only other) part, the file content
@@ -215,7 +258,7 @@ class Response(object):
         if isinstance(self._content, str):
             content = self._content.encode("utf-8")
 
-        self._handler.send_header("Content-Lenght", str(len(content)))
+        self._handler.send_header("Content-Length", str(len(content)))
         self._handler.end_headers()
         self._handler.wfile.write(content)
 

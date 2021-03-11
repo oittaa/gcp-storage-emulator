@@ -589,6 +589,86 @@ class ObjectsTests(ServerBaseCase):
         with self.assertRaises(NotFound):
             destination.compose([source_1, source_2])
 
+    def test_batch_delete_one(self):
+        content = "this is the content of the file\n"
+        bucket = self._client.create_bucket("batchbucket")
+        blob = bucket.blob("testblob-name1.txt")
+        blob.upload_from_string(content)
+        self.assertEqual(blob.custom_time, None)
+        with self._client.batch():
+            bucket.delete_blob("testblob-name1.txt")
+        self.assertIsNone(bucket.get_blob("testblob-name1.txt"))
+
+    def test_batch_patch_one(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        content = "this is the content of the file\n"
+        bucket = self._client.create_bucket("batchbucket")
+        blob = bucket.blob("testblob-name1.txt")
+        blob.upload_from_string(content)
+        blob.reload()
+        self.assertEqual(blob.custom_time, None)
+        blob.custom_time = now
+        with self._client.batch():
+            blob.patch()
+        blob = bucket.get_blob("testblob-name1.txt")
+        self.assertEqual(blob.custom_time, now)
+
+    def test_batch_delete_two(self):
+        content = "this is the content of the file\n"
+        bucket = self._client.create_bucket("batchbucket")
+        blob = bucket.blob("testblob-name1.txt")
+        blob.upload_from_string(content)
+        blob = bucket.blob("testblob-name2.txt")
+        blob.upload_from_string(content)
+        with self._client.batch():
+            bucket.delete_blob("testblob-name1.txt")
+            bucket.delete_blob("testblob-name2.txt")
+        self.assertIsNone(bucket.get_blob("testblob-name1.txt"))
+        self.assertIsNone(bucket.get_blob("testblob-name2.txt"))
+
+    def test_batch_patch_two(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        content = "this is the content of the file\n"
+        bucket = self._client.create_bucket("batchbucket")
+        blob1 = bucket.blob("testblob-name1.txt")
+        blob1.upload_from_string(content)
+        blob2 = bucket.blob("testblob-name2.txt")
+        blob2.upload_from_string(content)
+        blob1.reload()
+        blob2.reload()
+        self.assertEqual(blob1.custom_time, None)
+        self.assertEqual(blob2.custom_time, None)
+        blob1.custom_time = now
+        blob2.custom_time = now
+        with self._client.batch():
+            blob1.patch()
+            blob2.patch()
+        blob1 = bucket.get_blob("testblob-name1.txt")
+        blob2 = bucket.get_blob("testblob-name2.txt")
+        self.assertEqual(blob1.custom_time, now)
+        self.assertEqual(blob2.custom_time, now)
+
+    def test_batch_delete_patch(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        content = "this is the content of the file\n"
+        bucket = self._client.create_bucket("batchbucket")
+        blob = bucket.blob("testblob-name1.txt")
+        blob.upload_from_string(content)
+        blob = bucket.blob("testblob-name2.txt")
+        blob.upload_from_string(content)
+        blob = bucket.blob("testblob-name3.txt")
+        blob.upload_from_string(content)
+        self.assertEqual(blob.custom_time, None)
+        blob.custom_time = now
+        with self._client.batch():
+            bucket.delete_blob("testblob-name1.txt")
+            bucket.delete_blob("testblob-name2.txt")
+            blob.patch()
+        self.assertIsNone(bucket.get_blob("testblob-name1.txt"))
+        self.assertIsNone(bucket.get_blob("testblob-name2.txt"))
+        blob = bucket.get_blob("testblob-name3.txt")
+        self.assertEqual(blob.custom_time, now)
+
 
 class HttpEndpointsTest(ServerBaseCase):
     """ Tests for the HTTP endpoints defined by server.HANDLERS. """
