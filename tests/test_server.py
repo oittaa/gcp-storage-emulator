@@ -598,7 +598,7 @@ class ObjectsTests(ServerBaseCase):
             bucket.delete_blob("testblob-name1.txt")
         self.assertIsNone(bucket.get_blob("testblob-name1.txt"))
 
-    def test_batch_delete_nonexistent(self):
+    def test_batch_delete_nonexistent_blob(self):
         bucket = self._client.create_bucket("batchbucket")
         with self.assertRaises(NotFound):
             with self._client.batch():
@@ -677,9 +677,11 @@ class ObjectsTests(ServerBaseCase):
     def test_batch_delete_buckets(self):
         bucket1 = self._client.create_bucket("batchbucket1")
         bucket2 = self._client.create_bucket("batchbucket2")
-        with self._client.batch():
-            bucket1.delete()
-            bucket2.delete()
+        with self.assertRaises(NotFound):
+            with self._client.batch():
+                bucket1.delete()
+                bucket1.delete()
+                bucket2.delete()
         with self.assertRaises(NotFound):
             self._client.get_bucket("batchbucket1")
         with self.assertRaises(NotFound):
