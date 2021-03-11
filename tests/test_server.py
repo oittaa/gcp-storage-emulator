@@ -599,6 +599,12 @@ class ObjectsTests(ServerBaseCase):
             bucket.delete_blob("testblob-name1.txt")
         self.assertIsNone(bucket.get_blob("testblob-name1.txt"))
 
+    def test_batch_delete_nonexistent(self):
+        bucket = self._client.create_bucket("batchbucket")
+        with self.assertRaises(NotFound):
+            with self._client.batch():
+                bucket.delete_blob("does-not-exist.txt")
+
     def test_batch_patch_one(self):
         now = datetime.datetime.now(datetime.timezone.utc)
         content = "this is the content of the file\n"
@@ -662,7 +668,6 @@ class ObjectsTests(ServerBaseCase):
         blob.custom_time = now
         with self._client.batch():
             bucket.delete_blob("testblob-name1.txt")
-            bucket.delete_blob("this-does-not-exist.txt")
             bucket.delete_blob("testblob-name2.txt")
             blob.patch()
         self.assertIsNone(bucket.get_blob("testblob-name1.txt"))

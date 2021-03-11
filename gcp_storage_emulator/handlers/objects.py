@@ -398,5 +398,6 @@ def batch(request, response, storage, *args, **kwargs):
             response.write("HTTP/1.1 404 Not Found\r\n")
             response.write("Content-Type: application/json; charset=UTF-8\r\n\r\n")
             response.write(json.dumps(resp_data))
+            response.write("\r\n\r\n")
 
     response.write("--{}--".format(boundary))
