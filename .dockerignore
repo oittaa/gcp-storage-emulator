@@ -19,3 +19,4 @@ coverage.xml
 .cloudstorage
 .editorconfig
 .vscode
+requirements-dev.txt
