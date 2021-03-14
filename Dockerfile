@@ -9,7 +9,7 @@ ENV HOST 0.0.0.0
 # Python app installation
 WORKDIR $APP_HOME
 COPY . ./
-RUN python -m pip install --upgrade pip && pip install .
+RUN ./install.sh
 
 ENTRYPOINT ["gcp-storage-emulator"]
 CMD ["start"]
