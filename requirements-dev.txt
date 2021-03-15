@@ -1,4 +1,4 @@
-flake8==3.8.4
+flake8==3.9.0
 google-cloud-storage==1.36.2
 pytest==6.2.2
 pytest-cov==2.11.1
