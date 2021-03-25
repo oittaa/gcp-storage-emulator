@@ -10,7 +10,7 @@ from base64 import b64encode
 from datetime import datetime, timezone
 from http import HTTPStatus
 
-import crc32c
+import google_crc32c
 from gcp_storage_emulator.exceptions import Conflict, NotFound
 
 logger = logging.getLogger("api.object")
@@ -61,8 +61,8 @@ def _handle_conflict(response, err):
 def _crc32c(content):
     if isinstance(content, str):
         content = content.encode()
-    val = crc32c.crc32c(content)
-    return b64encode(val.to_bytes(4, byteorder="big")).decode("ascii")
+    val = google_crc32c.Checksum(content)
+    return b64encode(val.digest()).decode("ascii")
 
 
 def _md5(content):
