@@ -257,6 +257,12 @@ class ObjectsTests(ServerBaseCase):
 
         self.assertIsNone(res)
 
+    def test_download_nonexistent(self):
+        bucket = self._client.create_bucket("testbucket")
+        blob = bucket.blob("idonotexist")
+        with self.assertRaises(NotFound):
+            blob.download_as_bytes()
+
     def test_download_as_bytes(self):
         content = "The quick brown fox jumps over the lazy dog\n"
         bucket = self._client.create_bucket("testbucket")
