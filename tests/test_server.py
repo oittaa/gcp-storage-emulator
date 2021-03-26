@@ -268,6 +268,39 @@ class ObjectsTests(ServerBaseCase):
         fetched_content = blob.download_as_bytes()
         self.assertEqual(fetched_content, content.encode("utf-8"))
 
+    def test_download_range_start(self):
+        content = b"123456789"
+        bucket = self._client.create_bucket("testbucket")
+
+        blob = bucket.blob("iexist")
+        blob.upload_from_string(content)
+
+        blob = bucket.get_blob("iexist")
+        fetched_content = blob.download_as_bytes(start=2)
+        self.assertEqual(fetched_content, b"3456789")
+
+    def test_download_range_end(self):
+        content = b"123456789"
+        bucket = self._client.create_bucket("testbucket")
+
+        blob = bucket.blob("iexist")
+        blob.upload_from_string(content)
+
+        blob = bucket.get_blob("iexist")
+        fetched_content = blob.download_as_bytes(end=4)
+        self.assertEqual(fetched_content, b"12345")
+
+    def test_download_range_start_end(self):
+        content = b"123456789"
+        bucket = self._client.create_bucket("testbucket")
+
+        blob = bucket.blob("iexist")
+        blob.upload_from_string(content)
+
+        blob = bucket.get_blob("iexist")
+        fetched_content = blob.download_as_bytes(start=2, end=4)
+        self.assertEqual(fetched_content, b"345")
+
     def test_set_content_encoding(self):
         content = "The quick brown fox jumps over the lazy dog\n"
         bucket = self._client.create_bucket("testbucket")
