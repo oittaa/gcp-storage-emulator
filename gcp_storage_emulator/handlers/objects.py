@@ -241,6 +241,8 @@ def upload_partial(request, response, storage, *args, **kwargs):
 
 
 def get(request, response, storage, *args, **kwargs):
+    if request.query.get("alt") and request.query.get("alt")[0] == "media":
+        return download(request, response, storage)
     try:
         obj = storage.get_file_obj(
             request.params["bucket_name"], request.params["object_id"]

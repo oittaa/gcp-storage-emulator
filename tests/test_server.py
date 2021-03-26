@@ -745,6 +745,30 @@ class HttpEndpointsTest(ServerBaseCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, content.encode("utf-8"))
 
+    def test_download_by_dl_api_url(self):
+        """ Objects should be downloadable over HTTP from the emulator client. """
+        content = "Here is some content"
+        bucket = self._client.create_bucket("stillabucket")
+        blob = bucket.blob("something.txt")
+        blob.upload_from_string(content)
+
+        url = self._url("/download/storage/v1/b/stillabucket/o/something.txt")
+        response = requests.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, content.encode("utf-8"))
+
+    def test_download_by_api_media_url(self):
+        """ Objects should be downloadable over HTTP from the emulator client. """
+        content = "Here is some content"
+        bucket = self._client.create_bucket("newishbucket")
+        blob = bucket.blob("something.txt")
+        blob.upload_from_string(content)
+
+        url = self._url("/storage/v1/b/newishbucket/o/something.txt")
+        response = requests.get(url, params={"alt": "media"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, content.encode("utf-8"))
+
     def test_download_file_within_folder(self):
         """Cloud Storage allows folders within buckets, so the download URL should allow for this."""
         content = "Here is some content"
