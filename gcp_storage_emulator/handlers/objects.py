@@ -344,7 +344,6 @@ def download(request, response, storage, *args, **kwargs):
             request.params["bucket_name"], request.params["object_id"]
         )
         range = request.get_header("range", None)
-        print(range)
         if range:
             regex = r"^\s*bytes=(?P<start>[0-9]+)-(?P<end>[0-9]*)$"
             pattern = re.compile(regex)
