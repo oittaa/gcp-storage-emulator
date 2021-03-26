@@ -396,7 +396,7 @@ class ObjectsTests(ServerBaseCase):
         blob.md5_hash = md5_hash
         blob.upload_from_string(content)
         download_blob = bucket.get_blob("hashtest")
-        self.assertEqual(download_blob.download_as_bytes(), content)
+        self.assertEqual(download_blob.download_as_bytes(checksum="md5"), content)
         self.assertEqual(download_blob.md5_hash, md5_hash)
 
     def test_invalid_md5_hash(self):
@@ -415,7 +415,7 @@ class ObjectsTests(ServerBaseCase):
         blob.crc32c = crc32c_hash
         blob.upload_from_string(content)
         download_blob = bucket.get_blob("hashtest")
-        self.assertEqual(download_blob.download_as_bytes(), content)
+        self.assertEqual(download_blob.download_as_bytes(checksum="crc32c"), content)
         self.assertEqual(download_blob.crc32c, crc32c_hash)
 
     def test_invalid_crc32c_hash(self):
