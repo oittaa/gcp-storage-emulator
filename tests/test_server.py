@@ -16,7 +16,7 @@ def _get_storage_client(http):
     """Gets a python storage client"""
     os.environ["STORAGE_EMULATOR_HOST"] = "http://localhost:9023"
 
-    # Cloud storage uses environment variables to configure api endpoints for
+    # Cloud Storage uses environment variables to configure API endpoints for
     # file upload - which is read at module import time
     from google.cloud import storage
 
@@ -44,7 +44,7 @@ class ServerBaseCase(BaseTestCase):
     def setUp(self):
         self._session = requests.Session()
         self._client = _get_storage_client(self._session)
-        ObjectsTests._server.wipe()
+        self._server.wipe()
 
 
 class BucketsTests(BaseTestCase):
@@ -58,7 +58,7 @@ class BucketsTests(BaseTestCase):
         cls._server.stop()
 
     def setUp(self):
-        BucketsTests._server.wipe()
+        self._server.wipe()
         self._session = requests.Session()
         self._client = _get_storage_client(self._session)
 
@@ -105,8 +105,7 @@ class BucketsTests(BaseTestCase):
             self.assertFalse(pwd.exists("bucket_name"))
 
     def test_bucket_delete_non_existing(self):
-        # client.bucket doesn't create the actual bucket resource remotely,
-        # it only instantiate it in the local client
+        # client.bucket doesn't create the actual bucket resource remotely
         bucket = self._client.bucket("bucket_name")
         with self.assertRaises(NotFound):
             bucket.delete()
@@ -134,8 +133,6 @@ class BucketsTests(BaseTestCase):
 
         with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
             self.assertFalse(pwd.exists("bucket_name"))
-
-    # TODO: test delete-force
 
 
 class DefaultBucketTests(BaseTestCase):
@@ -747,24 +744,24 @@ class HttpEndpointsTest(ServerBaseCase):
 
     def test_download_by_dl_api_url(self):
         """ Objects should be downloadable over HTTP from the emulator client. """
-        content = "Here is some content"
-        bucket = self._client.create_bucket("stillabucket")
+        content = "Here is some content 123"
+        bucket = self._client.create_bucket("bucket")
         blob = bucket.blob("something.txt")
         blob.upload_from_string(content)
 
-        url = self._url("/download/storage/v1/b/stillabucket/o/something.txt")
+        url = self._url("/download/storage/v1/b/bucket/o/something.txt")
         response = requests.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, content.encode("utf-8"))
 
     def test_download_by_api_media_url(self):
         """ Objects should be downloadable over HTTP from the emulator client. """
-        content = "Here is some content"
-        bucket = self._client.create_bucket("newishbucket")
+        content = "Here is some content 456"
+        bucket = self._client.create_bucket("bucket")
         blob = bucket.blob("something.txt")
         blob.upload_from_string(content)
 
-        url = self._url("/storage/v1/b/newishbucket/o/something.txt")
+        url = self._url("/storage/v1/b/bucket/o/something.txt")
         response = requests.get(url, params={"alt": "media"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, content.encode("utf-8"))
