@@ -29,6 +29,8 @@ _WRITABLE_FIELDS = (
     "storageClass",
 )
 
+_HASH_HEADER = "X-Goog-Hash"
+
 BAD_REQUEST = {
     "error": {
         "errors": [{"domain": "global", "reason": "invalid", "message": None}],
@@ -360,6 +362,9 @@ def download(request, response, storage, *args, **kwargs):
                     start, end, orig_len
                 )
                 response.status = HTTPStatus.PARTIAL_CONTENT
+        else:
+            hash_header = "crc32c={},md5={}".format(obj["crc32c"], obj["md5Hash"])
+            response[_HASH_HEADER] = hash_header
 
         response.write_file(file, content_type=obj.get("contentType"))
     except NotFound:
