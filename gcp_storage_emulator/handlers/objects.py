@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import math
+import re
 import secrets
 import string
 import time
@@ -342,6 +343,24 @@ def download(request, response, storage, *args, **kwargs):
         obj = storage.get_file_obj(
             request.params["bucket_name"], request.params["object_id"]
         )
+        range = request.get_header("range", None)
+        if range:
+            regex = r"^\s*bytes=(?P<start>[0-9]+)-(?P<end>[0-9]*)$"
+            pattern = re.compile(regex)
+            match = pattern.fullmatch(range)
+            if match:
+                end = orig_len = len(file)
+                m_dict = match.groupdict()
+                start = int(m_dict["start"])
+                if m_dict["end"]:
+                    end = min(orig_len, int(m_dict["end"]) + 1)
+                file = file[start:end]
+                end -= 1
+                response["Content-Range"] = "bytes {}-{}/{}".format(
+                    start, end, orig_len
+                )
+                response.status = HTTPStatus.PARTIAL_CONTENT
+
         response.write_file(file, content_type=obj.get("contentType"))
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
