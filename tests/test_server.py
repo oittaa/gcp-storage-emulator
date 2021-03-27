@@ -103,7 +103,7 @@ class BucketsTests(BaseTestCase):
         bucket = self._client.create_bucket("bucket_name")
         bucket.delete()
 
-        with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
+        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
             self.assertFalse(pwd.exists("bucket_name"))
 
     def test_bucket_delete_non_existing(self):
@@ -133,7 +133,7 @@ class BucketsTests(BaseTestCase):
         blob = bucket.get_blob("cantouchme.txt")
         self.assertIsNone(blob)
 
-        with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
+        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
             self.assertFalse(pwd.exists("bucket_name"))
 
 
@@ -161,7 +161,7 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.blob("testblob-name.txt")
         blob.upload_from_string(content)
 
-        with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
+        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
             read_content = pwd.readtext("testbucket/testblob-name.txt")
             self.assertEqual(read_content, content)
 
@@ -174,7 +174,7 @@ class ObjectsTests(ServerBaseCase):
         with open(text_test, "rb") as file:
             blob.upload_from_file(file)
 
-            with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
+            with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
                 read_content = pwd.readtext("testbucket/test_text.txt")
 
         with open(text_test, "rb") as file:
@@ -190,7 +190,7 @@ class ObjectsTests(ServerBaseCase):
         with open(test_binary, "rb") as file:
             blob.upload_from_file(file)
 
-        with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
+        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
             read_content = pwd.readbytes("testbucket/binary.png")
 
         with open(test_binary, "rb") as file:
@@ -205,7 +205,7 @@ class ObjectsTests(ServerBaseCase):
 
         blob.upload_from_file(test_binary, size=len(content))
 
-        with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
+        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
             read_content = pwd.readbytes("testbucket/binary_cr.png")
 
         self.assertEqual(read_content, content)
@@ -471,7 +471,7 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.blob("canttouchme.txt")
         blob.upload_from_string("File content")
 
-        with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
+        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
             self.assertTrue(pwd.exists("bucket_name/canttouchme.txt"))
             blob.delete()
 
@@ -490,7 +490,7 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.blob("this/is/a/nested/file.txt")
         blob.upload_from_string("Not even joking!")
 
-        with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
+        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
             read_content = pwd.readtext("bucket_name/this/is/a/nested/file.txt")
             self.assertEqual(read_content, "Not even joking!")
 
@@ -502,7 +502,7 @@ class ObjectsTests(ServerBaseCase):
         bucket.blob("this/is/another/nested/file.txt")
         blob.upload_from_string("Yet another one")
 
-        with fs.open_fs(STORAGE_BASE + STORAGE_DIR) as pwd:
+        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
             self.assertTrue(pwd.exists("bucket_name/this/is/a/nested/file.txt"))
 
     def _assert_blob_list(self, expected, actual):
