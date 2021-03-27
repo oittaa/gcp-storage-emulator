@@ -39,6 +39,7 @@ class ServerBaseCase(BaseTestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls._server.wipe()
         cls._server.stop()
 
     def setUp(self):
@@ -55,6 +56,7 @@ class BucketsTests(BaseTestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls._server.wipe()
         cls._server.stop()
 
     def setUp(self):
@@ -138,6 +140,7 @@ class BucketsTests(BaseTestCase):
 class DefaultBucketTests(BaseTestCase):
     def tearDown(self):
         if self._server:
+            self._server.wipe()
             self._server.stop()
         return super().tearDown()
 
@@ -259,6 +262,12 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.blob("idonotexist")
         with self.assertRaises(NotFound):
             blob.download_as_bytes()
+
+    def test_upload_to_nonexistent_bucket(self):
+        bucket = self._client.bucket("non-existent-test-bucket")
+        blob = bucket.blob("idonotexisteither")
+        with self.assertRaises(NotFound):
+            blob.upload_from_string("some_content")
 
     def test_download_as_bytes(self):
         content = "The quick brown fox jumps over the lazy dog\n"

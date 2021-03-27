@@ -158,6 +158,8 @@ def _multipart_upload(request, response, storage):
         )
 
         response.json(obj)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
         _handle_conflict(response, err)
 
@@ -236,6 +238,8 @@ def upload_partial(request, response, storage, *args, **kwargs):
             obj["bucket"], obj["name"], request.data, obj, upload_id
         )
         return response.json(obj)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
         _handle_conflict(response, err)
 
@@ -294,6 +298,8 @@ def copy(request, response, storage, *args, **kwargs):
             dest_obj,
         )
         response.json(dest_obj)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
         _handle_conflict(response, err)
 
@@ -335,6 +341,8 @@ def compose(request, response, storage, *args, **kwargs):
             dest_obj,
         )
         response.json(dest_obj)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
         _handle_conflict(response, err)
 
