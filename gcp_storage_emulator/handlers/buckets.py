@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from http import HTTPStatus
 
 from gcp_storage_emulator import settings
@@ -33,7 +33,7 @@ BAD_REQUEST = {
 
 
 def _make_bucket_resource(bucket_name):
-    now = datetime.now().__str__()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     return {
         "kind": "storage#bucket",
         "id": bucket_name,

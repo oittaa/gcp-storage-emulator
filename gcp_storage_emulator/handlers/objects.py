@@ -158,6 +158,8 @@ def _multipart_upload(request, response, storage):
         )
 
         response.json(obj)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
         _handle_conflict(response, err)
 
@@ -174,19 +176,23 @@ def _create_resumable_upload(request, response, storage):
         content_type,
         content_length,
     )
+    try:
+        id = storage.create_resumable_upload(
+            request.params["bucket_name"],
+            request.data["name"],
+            obj,
+        )
 
-    id = storage.create_resumable_upload(
-        request.params["bucket_name"],
-        request.data["name"],
-        obj,
-    )
-
-    encoded_id = urllib.parse.urlencode(
-        {
-            "upload_id": id,
-        }
-    )
-    response["Location"] = request.full_url + "&{}".format(encoded_id)
+        encoded_id = urllib.parse.urlencode(
+            {
+                "upload_id": id,
+            }
+        )
+        response["Location"] = request.full_url + "&{}".format(encoded_id)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
+    except Conflict as err:
+        _handle_conflict(response, err)
 
 
 def _delete(storage, bucket_name, object_id):
@@ -236,6 +242,8 @@ def upload_partial(request, response, storage, *args, **kwargs):
             obj["bucket"], obj["name"], request.data, obj, upload_id
         )
         return response.json(obj)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
         _handle_conflict(response, err)
 
@@ -294,6 +302,8 @@ def copy(request, response, storage, *args, **kwargs):
             dest_obj,
         )
         response.json(dest_obj)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
         _handle_conflict(response, err)
 
@@ -335,6 +345,8 @@ def compose(request, response, storage, *args, **kwargs):
             dest_obj,
         )
         response.json(dest_obj)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
         _handle_conflict(response, err)
 

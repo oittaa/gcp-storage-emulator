@@ -15,6 +15,7 @@ class StorageOSFSTests(BaseTestCase):
     def setUp(self):
         self.storage = Storage()
         self.storage.wipe()
+        self.storage.create_bucket("a_bucket_name", {})
 
     def tearDown(self):
         self.storage.wipe()

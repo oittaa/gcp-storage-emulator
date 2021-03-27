@@ -52,6 +52,7 @@ def prepare_args_parser():
     start.add_argument(
         "-M",
         "--no-store-on-disk",
+        "--in-memory",
         action="store_true",
         default=False,
         help="use in-memory storage",

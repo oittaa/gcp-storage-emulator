@@ -159,7 +159,13 @@ class Storage(object):
             content {bytes} -- Content of the file to write
             file_obj {dict} -- GCS-like Object resource
             file_id {str} -- Resumable file id
+
+        Raises:
+            NotFound: Raised when the bucket doesn't exist
         """
+
+        if bucket_name not in self.buckets:
+            raise NotFound
 
         file_dir = self._get_or_create_dir(bucket_name, file_name)
 
@@ -188,9 +194,15 @@ class Storage(object):
             file_name {string} -- File name used to store data
             file_obj {dict} -- GCS Object resource
 
+        Raises:
+            NotFound: Raised when the bucket doesn't exist
+
         Returns:
             str -- id of the resumable upload session (`upload_id`)
         """
+
+        if bucket_name not in self.buckets:
+            raise NotFound
 
         file_id = "{}:{}:{}".format(bucket_name, file_name, datetime.datetime.now())
         self.resumable[file_id] = file_obj
