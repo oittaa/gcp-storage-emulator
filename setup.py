@@ -55,7 +55,7 @@ setup(
         "wheel",
     ],
     install_requires=[
-        "fs==2.4.12",
+        "fs==2.4.13",
         "google-crc32c==1.1.2",
     ],
     python_requires=">=3.6",
