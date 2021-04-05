@@ -1,5 +1,5 @@
 flake8==3.9.0
 google-cloud-storage==1.37.0
-pytest==6.2.2
+pytest==6.2.3
 pytest-cov==2.11.1
 requests==2.25.1
