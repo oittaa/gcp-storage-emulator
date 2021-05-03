@@ -734,13 +734,13 @@ class ObjectsTests(ServerBaseCase):
 
 
 class HttpEndpointsTest(ServerBaseCase):
-    """ Tests for the HTTP endpoints defined by server.HANDLERS. """
+    """Tests for the HTTP endpoints defined by server.HANDLERS."""
 
     def _url(self, path):
         return os.environ["STORAGE_EMULATOR_HOST"] + path
 
     def test_download_by_url(self):
-        """ Objects should be downloadable over HTTP from the emulator client. """
+        """Objects should be downloadable over HTTP from the emulator client."""
         content = "Here is some content"
         bucket = self._client.create_bucket("anotherbucket")
         blob = bucket.blob("something.txt")
@@ -752,7 +752,7 @@ class HttpEndpointsTest(ServerBaseCase):
         self.assertEqual(response.content, content.encode("utf-8"))
 
     def test_download_by_dl_api_url(self):
-        """ Objects should be downloadable over HTTP from the emulator client. """
+        """Objects should be downloadable over HTTP from the emulator client."""
         content = "Here is some content 123"
         bucket = self._client.create_bucket("bucket")
         blob = bucket.blob("something.txt")
@@ -764,7 +764,7 @@ class HttpEndpointsTest(ServerBaseCase):
         self.assertEqual(response.content, content.encode("utf-8"))
 
     def test_download_by_api_media_url(self):
-        """ Objects should be downloadable over HTTP from the emulator client. """
+        """Objects should be downloadable over HTTP from the emulator client."""
         content = "Here is some content 456"
         bucket = self._client.create_bucket("bucket")
         blob = bucket.blob("something.txt")
