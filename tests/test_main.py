@@ -42,7 +42,7 @@ class ServerBaseCase(BaseTestCase):
 
 
 class MainHttpEndpointsTest(ServerBaseCase):
-    """ Tests for the HTTP endpoints. """
+    """Tests for the HTTP endpoints."""
 
     def _url(self, path):
         return os.environ["STORAGE_EMULATOR_HOST"] + path
@@ -60,7 +60,7 @@ class MainHttpEndpointsTest(ServerBaseCase):
         self.assertEqual(response.content, "OK".encode("utf-8"))
 
     def test_download_by_url(self):
-        """ Objects should be downloadable over HTTP from the emulator client. """
+        """Objects should be downloadable over HTTP from the emulator client."""
         content = "Here is some content"
         bucket = self._client.create_bucket("anotherbucket")
         blob = bucket.blob("something.txt")
