@@ -238,10 +238,10 @@ def upload_partial(request, response, storage, *args, **kwargs):
         obj = storage.get_resumable_file_obj(upload_id)
         obj = _checksums(request.data, obj)
         obj["size"] = str(len(request.data))
-        obj = storage.create_file(
+        storage.create_file(
             obj["bucket"], obj["name"], request.data, obj, upload_id
         )
-        return response.json(obj)
+        response.json(obj)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
