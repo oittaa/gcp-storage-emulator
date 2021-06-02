@@ -225,6 +225,18 @@ class ObjectsTests(ServerBaseCase):
             with open(test_binary, "rb") as orig_file:
                 self.assertEqual(temp_file.read(), orig_file.read())
 
+    def test_upload_from_file(self):
+        test_binary = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "test_binary.png"
+        )
+        file_name = "test_binary.png"
+
+        bucket = self._client.create_bucket("testbucket")
+        blob = bucket.blob(file_name)
+        with open(test_binary, "rb") as filehandle:
+            blob.upload_from_file(filehandle)
+            self.assertTrue(blob.id.startswith("testbucket/test_binary.png/"))
+
     def test_get(self):
         file_name = "testblob-name.txt"
         content = "this is the content of the file\n"
