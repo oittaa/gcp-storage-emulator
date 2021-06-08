@@ -96,6 +96,7 @@ def _checksums(content, file_obj):
 
 def _patch_object(obj, metadata):
     if metadata:
+        obj["metageneration"] = str(int(obj["metageneration"]) + 1)
         for key in _WRITABLE_FIELDS:
             val = metadata.get(key)
             if val is not None:

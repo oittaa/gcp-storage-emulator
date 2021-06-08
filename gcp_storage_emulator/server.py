@@ -1,8 +1,10 @@
+import gzip
 import json
 import logging
 import re
 import threading
 import time
+import zlib
 from email.parser import BytesParser
 from functools import partial
 from http import server, HTTPStatus
@@ -117,16 +119,51 @@ def _parse_batch_item(item):
     return parsed_params
 
 
-def _read_data(request_handler):
-    if (
-        not request_handler.headers["Content-Length"]
-        or not request_handler.headers["Content-Type"]
-    ):
+def _read_raw_data(request_handler):
+    if request_handler.headers["Content-Length"]:
+        return request_handler.rfile.read(
+            int(request_handler.headers["Content-Length"])
+        )
+
+    if request_handler.headers["Transfer-Encoding"] == "chunked":
+        raw_data = b""
+
+        while True:
+            line = request_handler.rfile.readline().strip()
+            chunk_size = int(line, 16)
+            if chunk_size == 0:
+                break
+
+            raw_data += request_handler.rfile.read(chunk_size)
+
+            request_handler.rfile.readline()
+
+        return raw_data
+
+    return None
+
+
+def _decode_raw_data(raw_data, request_handler):
+    if not raw_data:
         return None
 
-    raw_data = request_handler.rfile.read(
-        int(request_handler.headers["Content-Length"])
-    )
+    if request_handler.headers["Content-Encoding"] == "gzip":
+        return gzip.decompress(raw_data)
+
+    if request_handler.headers["Content-Encoding"] == "deflate":
+        return zlib.decompress(raw_data)
+
+    return raw_data
+
+
+def _read_data(request_handler):
+    if not request_handler.headers["Content-Type"]:
+        return None
+
+    raw_data = _decode_raw_data(_read_raw_data(request_handler), request_handler)
+
+    if not raw_data:
+        return None
 
     content_type = request_handler.headers["Content-Type"]
 
@@ -272,6 +309,9 @@ class Router(object):
         self._request_handler = request_handler
 
     def handle(self, method):
+        if self._request_handler.headers["x-http-method-override"]:
+            method = self._request_handler.headers["x-http-method-override"]
+
         request = Request(self._request_handler, method)
         response = Response(self._request_handler)
 

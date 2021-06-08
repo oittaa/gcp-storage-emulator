@@ -400,10 +400,12 @@ class ObjectsTests(ServerBaseCase):
         blob.content_encoding = "gzip"
         blob.upload_from_string(content)
         blob.reload()
+        metageneration = blob.metageneration
         self.assertEqual(blob.content_encoding, "gzip")
         blob.content_encoding = ""
         blob.patch()
         blob.reload()
+        self.assertNotEqual(blob.metageneration, metageneration)
         self.assertEqual(blob.content_encoding, "")
 
     def test_valid_md5_hash(self):
