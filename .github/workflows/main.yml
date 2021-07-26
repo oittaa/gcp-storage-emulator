@@ -42,7 +42,7 @@ jobs:
           pip install .
           pytest --cov=gcp_storage_emulator --cov-report=xml tests/
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v2.0.1
+        uses: codecov/codecov-action@v2.0.2
         with:
           flags: unittests
 
