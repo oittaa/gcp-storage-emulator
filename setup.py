@@ -56,7 +56,7 @@ setup(
     ],
     install_requires=[
         "fs==2.4.13",
-        "google-crc32c==1.1.2",
+        "google-crc32c==1.1.3",
     ],
     python_requires=">=3.6",
 )
