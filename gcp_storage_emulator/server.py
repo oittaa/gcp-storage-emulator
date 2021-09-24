@@ -400,9 +400,7 @@ class Server(object):
     def __init__(self, host, port, in_memory, default_bucket=None):
         self._storage = Storage(use_memory_fs=in_memory)
         if default_bucket:
-            logging.debug(
-                '[SERVER] Creating default bucket "{}"'.format(default_bucket)
-            )
+            logger.debug('[SERVER] Creating default bucket "{}"'.format(default_bucket))
             buckets.create_bucket(default_bucket, self._storage)
         self._api = APIThread(host, port, self._storage)
 
