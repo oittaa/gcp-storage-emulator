@@ -2,5 +2,5 @@ flake8==3.9.2
 google-cloud-storage==1.42.3
 google-crc32c==1.2.0
 pytest==6.2.5
-pytest-cov==2.12.1
+pytest-cov==3.0.0
 requests==2.26.0
