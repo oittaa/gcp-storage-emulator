@@ -354,6 +354,9 @@ class Storage(object):
 
         try:
             self._fs.remove(".meta")
+        except ResourceNotFound:
+            pass
+        try:
             for path in self._fs.listdir("."):
                 self._fs.removetree(path)
         except ResourceNotFound as e:
