@@ -746,6 +746,30 @@ class ObjectsTests(ServerBaseCase):
         with self.assertRaises(NotFound):
             self._client.get_bucket("batchbucket2")
 
+    def test_resumable_upload_small_chunk_size(self):
+        content = b"a" * 10000000
+        bucket = self._client.create_bucket("testbucket")
+
+        blob = bucket.blob("resumable-test", chunk_size=256 * 1024)
+        blob.upload_from_string(content)
+
+        blob = bucket.get_blob("resumable-test")
+        fetched_content = blob.download_as_bytes()
+        self.assertEqual(len(fetched_content), len(content))
+        self.assertEqual(fetched_content, content)
+
+    def test_resumable_upload_large_file(self):
+        content = b"abcde12345" * 20000000
+        bucket = self._client.create_bucket("testbucket")
+
+        blob = bucket.blob("resumable-test")
+        blob.upload_from_string(content)
+
+        blob = bucket.get_blob("resumable-test")
+        fetched_content = blob.download_as_bytes()
+        self.assertEqual(len(fetched_content), len(content))
+        self.assertEqual(fetched_content, content)
+
 
 class HttpEndpointsTest(ServerBaseCase):
     """Tests for the HTTP endpoints defined by server.HANDLERS."""

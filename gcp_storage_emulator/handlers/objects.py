@@ -9,6 +9,7 @@ import time
 import urllib.parse
 from base64 import b64encode
 from datetime import datetime, timezone
+from enum import IntEnum
 from http import HTTPStatus
 
 import google_crc32c
@@ -50,6 +51,18 @@ NOT_FOUND = {
 
 MD5_CHECKSUM_ERROR = 'Provided MD5 hash "{}" doesn\'t match calculated MD5 hash "{}".'
 CRC32C_CHECKSUM_ERROR = 'Provided CRC32C "{}" doesn\'t match calculated CRC32C "{}".'
+
+
+class GoogleHTTPStatus(IntEnum):
+    def __new__(cls, value, phrase, description=""):
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+
+        obj.phrase = phrase
+        obj.description = description
+        return obj
+
+    RESUME_INCOMPLETE = 308, "Resume Incomplete"
 
 
 def _handle_conflict(response, err):
@@ -183,7 +196,6 @@ def _create_resumable_upload(request, response, storage):
             request.data["name"],
             obj,
         )
-
         encoded_id = urllib.parse.urlencode(
             {
                 "upload_id": id,
@@ -237,9 +249,30 @@ def upload_partial(request, response, storage, *args, **kwargs):
     upload_id = request.query.get("upload_id")[0]
     try:
         obj = storage.get_resumable_file_obj(upload_id)
-        obj = _checksums(request.data, obj)
-        obj["size"] = str(len(request.data))
-        storage.create_file(obj["bucket"], obj["name"], request.data, obj, upload_id)
+        content_range = request.get_header("content-range", None)
+        if content_range:
+            regex = (
+                r"^\s*bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/(?P<total_size>[0-9]+)$"
+            )
+            pattern = re.compile(regex)
+            match = pattern.fullmatch(content_range)
+            if not match:
+                # TODO: raise error?
+                logger.error(f"Invalid header: 'Content-Range: {content_range}'")
+                return
+            m_dict = match.groupdict()
+            total_size = int(m_dict["total_size"])
+            data = storage.add_to_resumable_upload(upload_id, request.data, total_size)
+            if not data:
+                response.status = GoogleHTTPStatus.RESUME_INCOMPLETE
+                response["Range"] = "bytes=0-{}".format(m_dict["end"])
+                return
+        else:
+            data = request.data
+
+        obj = _checksums(data, obj)
+        obj["size"] = str(len(data))
+        storage.create_file(obj["bucket"], obj["name"], data, obj, upload_id)
         response.json(obj)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
