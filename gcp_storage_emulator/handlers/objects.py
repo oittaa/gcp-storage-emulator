@@ -258,7 +258,7 @@ def upload_partial(request, response, storage, *args, **kwargs):
             match = pattern.fullmatch(content_range)
             if not match:
                 # TODO: raise error?
-                logger.error(f"Invalid header: {content_range=}")
+                logger.error(f"Invalid header: 'Content-Range: {content_range}'")
                 return
             m_dict = match.groupdict()
             total_size = int(m_dict["total_size"])
