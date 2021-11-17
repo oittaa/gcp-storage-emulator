@@ -50,6 +50,8 @@ You can wipe the data by running
 gcp-storage-emulator wipe
 ```
 
+You can pass `--keep-buckets` to wipe the data while keeping the buckets.
+
 #### Example
 
 Use in-memory storage and automatically create default storage bucket `my-bucket`.

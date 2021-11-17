@@ -6,5 +6,5 @@ BATCH_API_ENDPOINT = "/batch/storage/v1"
 DOWNLOAD_API_ENDPOINT = "/download/storage/v1"
 
 # pyfilesystem assumes OS fs within CWD as base
-STORAGE_BASE = os.environ.get("STORAGE_BASE", "./")
+STORAGE_BASE = os.path.abspath(os.environ.get("STORAGE_BASE", "./"))
 STORAGE_DIR = os.environ.get("STORAGE_DIR", ".cloudstorage")

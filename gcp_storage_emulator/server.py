@@ -24,8 +24,12 @@ PATCH = "PATCH"
 
 
 def _wipe_data(req, res, storage):
+    keep_buckets = bool(req.query.get("keep-buckets"))
     logger.debug("Wiping storage")
-    storage.wipe()
+    if keep_buckets:
+        logger.debug("...while keeping the buckets")
+    storage.wipe(keep_buckets)
+
     logger.debug("Storage wiped")
     res.write("OK")
 
@@ -168,7 +172,6 @@ def _read_data(request_handler):
     content_type = request_handler.headers["Content-Type"]
 
     if content_type.startswith("application/json"):
-        # TODO: handle encodings other than utf-8
         return json.loads(raw_data)
 
     if content_type.startswith("multipart/"):
@@ -397,8 +400,8 @@ class APIThread(threading.Thread):
 
 
 class Server(object):
-    def __init__(self, host, port, in_memory, default_bucket=None):
-        self._storage = Storage(use_memory_fs=in_memory)
+    def __init__(self, host, port, in_memory, default_bucket=None, data_dir=None):
+        self._storage = Storage(use_memory_fs=in_memory, data_dir=data_dir)
         if default_bucket:
             logger.debug('[SERVER] Creating default bucket "{}"'.format(default_bucket))
             buckets.create_bucket(default_bucket, self._storage)
@@ -411,8 +414,8 @@ class Server(object):
     def stop(self):
         self._api.join(timeout=1)
 
-    def wipe(self):
-        self._storage.wipe()
+    def wipe(self, keep_buckets=False):
+        self._storage.wipe(keep_buckets=keep_buckets)
 
     def run(self):
         try:
@@ -430,6 +433,12 @@ class Server(object):
             self.stop()
 
 
-def create_server(host, port, in_memory=False, default_bucket=None):
+def create_server(host, port, in_memory=False, default_bucket=None, data_dir=None):
     logger.info("Starting server at {}:{}".format(host, port))
-    return Server(host, port, in_memory=in_memory, default_bucket=default_bucket)
+    return Server(
+        host,
+        port,
+        in_memory=in_memory,
+        default_bucket=default_bucket,
+        data_dir=data_dir,
+    )
