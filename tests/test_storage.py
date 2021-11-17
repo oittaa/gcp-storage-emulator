@@ -179,3 +179,7 @@ class StorageOSFSTests(BaseTestCase):
             self.assertEqual(meta["buckets"]["bucket_b"], bucket_b_obj)
             self.assertEqual(meta["objects"], {})
             self.assertEqual(meta["resumable"], {})
+
+    def test_without_absolute_path(self):
+        with self.assertRaises(ValueError):
+            _ = Storage(data_dir="test")
