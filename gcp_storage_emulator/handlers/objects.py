@@ -250,7 +250,7 @@ def upload_partial(request, response, storage, *args, **kwargs):
     upload_id = request.query.get("upload_id")[0]
     regex = r"^\s*bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/(?P<total_size>[0-9]+)$"
     pattern = re.compile(regex)
-    content_range = request.get_header("Content-Range", None)
+    content_range = request.get_header("Content-Range", "")
     match = pattern.fullmatch(content_range)
     try:
         obj = storage.get_resumable_file_obj(upload_id)
