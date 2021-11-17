@@ -800,3 +800,34 @@ class HttpEndpointsTest(ServerBaseCase):
         response = requests.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, content.encode("utf-8"))
+
+    def test_wipe(self):
+        """Objects should wipe the data"""
+        storage_path = os.path.join(STORAGE_BASE, STORAGE_DIR)
+        content = "Here is some content"
+        bucket = self._client.create_bucket("anotherbucket1")
+        blob = bucket.blob("something.txt")
+        blob.upload_from_string(content)
+
+        url = self._url("/wipe")
+        response = requests.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(len(os.listdir(storage_path)) == 0)
+
+    def test_wipe_keep_buckets(self):
+        """Objects should wipe the data but keep the root buckets"""
+        blob_path = "something.txt"
+        bucket_name = "anewone"
+        content = "Here is some content"
+        bucket = self._client.create_bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.upload_from_string(content)
+
+        url = self._url("/wipe?keep-buckets=true")
+        response = requests.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        fetched_bucket = self._client.get_bucket(bucket_name)
+        self.assertEqual(fetched_bucket.name, bucket.name)
+        with self.assertRaises(NotFound):
+            fetched_bucket.blob(blob_path).download_as_text()

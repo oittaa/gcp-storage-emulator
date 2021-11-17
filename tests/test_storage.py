@@ -155,3 +155,27 @@ class StorageOSFSTests(BaseTestCase):
         with open(meta_path, "r") as file:
             meta = json.load(file)
             self.assertIsNone(meta["buckets"].get("a_bucket"))
+
+    def test_wipe(self):
+        bucket_a_obj = {"key_a": "val_a"}
+        bucket_b_obj = {"key_b": "valb_"}
+        self.storage.create_bucket("bucket_a", bucket_a_obj)
+        self.storage.create_bucket("bucket_b", bucket_b_obj)
+        self.storage.wipe()
+        meta_path = _get_meta_path()
+        self.assertFalse(os.path.isfile(meta_path))
+
+    def test_wipe_keep_buckets(self):
+        bucket_a_obj = {"key_a": "val_a"}
+        bucket_b_obj = {"key_b": "valb_"}
+        self.storage.create_bucket("bucket_a", bucket_a_obj)
+        self.storage.create_bucket("bucket_b", bucket_b_obj)
+        self.storage.wipe(keep_buckets=True)
+        meta_path = _get_meta_path()
+
+        with open(meta_path, "r") as file:
+            meta = json.load(file)
+            self.assertEqual(meta["buckets"]["bucket_a"], bucket_a_obj)
+            self.assertEqual(meta["buckets"]["bucket_b"], bucket_b_obj)
+            self.assertEqual(meta["objects"], {})
+            self.assertEqual(meta["resumable"], {})

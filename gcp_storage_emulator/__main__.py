@@ -19,10 +19,10 @@ def get_server(host, port, memory=False, default_bucket=None):
     return server
 
 
-def wipe():
+def wipe(keep_buckets=False):
     print("Wiping...")
     server = create_server(None, None, False)
-    server.wipe()
+    server.wipe(keep_buckets=keep_buckets)
     print("Done.")
     return 0
 
@@ -57,8 +57,17 @@ def prepare_args_parser():
         default=False,
         help="use in-memory storage",
     )
+    start.add_argument(
+        "-D", "--data-dir", default=None, help="directory to use as the storage root"
+    )
 
-    subparsers.add_parser("wipe", help="Wipe the local data")
+    wipe = subparsers.add_parser("wipe", help="Wipe the local data")
+    wipe.add_argument(
+        "--keep-buckets",
+        action="store_true",
+        default=False,
+        help="If provided the data will be wiped but the existing buckets are kept",
+    )
 
     create_bucket = subparsers.add_parser("create_bucket", help="create bucket")
     create_bucket.add_argument("-n", "--name", help="Name of the new bucket")
@@ -76,15 +85,15 @@ def main(args=sys.argv[1:], test_mode=False):
     if args.subcommand == "wipe":
         answer = input(
             "This operation will IRREVERSIBLY DELETE all your data. Do you wish to proceed? [y/N] "
-        ).lower()
-        if answer in ("y", "ye", "yes"):
-            sys.exit(wipe())
+        )
+        if answer.lower() in ("y", "ye", "yes"):
+            sys.exit(wipe(keep_buckets=args.keep_buckets))
         else:
             print("wipe command cancelled")
             sys.exit(1)
 
     if args.subcommand == "create_bucket":
-        storage = Storage()
+        storage = Storage(use_memory_fs=args.no_store_on_disk, data_dir=args.data_dir)
         create_bucket(args.name, storage)
         sys.exit(1)
 

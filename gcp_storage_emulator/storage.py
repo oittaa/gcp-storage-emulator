@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import os
 
 import fs
 from fs.errors import FileExpected, ResourceNotFound
@@ -12,7 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class Storage(object):
-    def __init__(self, use_memory_fs=False):
+    def __init__(self, use_memory_fs=False, data_dir=None):
+        if not data_dir:
+            data_dir = STORAGE_BASE
+        if not os.path.isabs(data_dir):
+            raise ValueError(f"{data_dir!r} must be an absolute path")
+
+        self._data_dir = data_dir
         self._use_memory_fs = use_memory_fs
         self._pwd = fs.open_fs(self.get_storage_base())
         try:
@@ -66,7 +73,7 @@ class Storage(object):
         if self._use_memory_fs:
             return "mem://"
         else:
-            return STORAGE_BASE
+            return self._data_dir
 
     def get_bucket(self, bucket_name):
         """Get the bucket resourec object given the bucket name
@@ -347,7 +354,8 @@ class Storage(object):
         except ResourceNotFound:
             logger.info("No folder to remove '{}'".format(path))
 
-    def wipe(self):
+    def wipe(self, keep_buckets=False):
+        existing_buckets = self.buckets
         self.buckets = {}
         self.objects = {}
         self.resumable = {}
@@ -361,6 +369,10 @@ class Storage(object):
                 self._fs.removetree(path)
         except ResourceNotFound as e:
             logger.warning(e)
+
+        if keep_buckets:
+            for bucket_name, bucket_obj in existing_buckets.items():
+                self.create_bucket(bucket_name, bucket_obj)
 
     def patch_object(self, bucket_name, file_name, file_obj):
         """Patch object
