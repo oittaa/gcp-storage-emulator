@@ -18,14 +18,9 @@ jobs:
 
   build:
     runs-on: ubuntu-20.04
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
         python-version: ['3.6', '3.7', '3.8', '3.9', '3.10', 'pypy-3.7']
-        experimental: [false]
-        include:
-          - python-version: '3.11-dev'
-            experimental: true
     steps:
       - uses: actions/checkout@v2.4.0
       - name: Set up Python ${{ matrix.python-version }}
