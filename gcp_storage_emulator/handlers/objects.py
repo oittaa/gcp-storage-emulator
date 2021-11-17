@@ -246,20 +246,15 @@ def insert(request, response, storage, *args, **kwargs):
 
 
 def upload_partial(request, response, storage, *args, **kwargs):
+    """https://cloud.google.com/storage/docs/performing-resumable-uploads"""
     upload_id = request.query.get("upload_id")[0]
+    regex = r"^\s*bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/(?P<total_size>[0-9]+)$"
+    pattern = re.compile(regex)
+    content_range = request.get_header("Content-Range", None)
+    match = pattern.fullmatch(content_range)
     try:
         obj = storage.get_resumable_file_obj(upload_id)
-        content_range = request.get_header("content-range", None)
-        if content_range:
-            regex = (
-                r"^\s*bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/(?P<total_size>[0-9]+)$"
-            )
-            pattern = re.compile(regex)
-            match = pattern.fullmatch(content_range)
-            if not match:
-                # TODO: raise error?
-                logger.error(f"Invalid header: 'Content-Range: {content_range}'")
-                return
+        if match:
             m_dict = match.groupdict()
             total_size = int(m_dict["total_size"])
             data = storage.add_to_resumable_upload(upload_id, request.data, total_size)

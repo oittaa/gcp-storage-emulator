@@ -151,7 +151,9 @@ class DefaultBucketTests(BaseTestCase):
         self._server.start()
         self._session = requests.Session()
         self._client = _get_storage_client(self._session)
-        self._client.get_bucket("example.appspot.com")
+        bucket = self._client.get_bucket("example.appspot.com")
+        self.assertEqual(bucket.name, "example.appspot.com")
+        self.assertEqual(bucket.storage_class, "STANDARD")
 
 
 class ObjectsTests(ServerBaseCase):
