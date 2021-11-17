@@ -14,14 +14,15 @@ DEFAULT_PORT = int(os.environ.get("PORT", 9023))
 DEFAULT_HOST = os.environ.get("HOST", "localhost")
 
 
-def get_server(host, port, memory=False, default_bucket=None):
-    server = create_server(host, port, memory, default_bucket)
+def get_server(host, port, memory=False, default_bucket=None, data_dir=None):
+    server = create_server(host, port, memory, default_bucket, data_dir=data_dir)
     return server
 
 
-def wipe(keep_buckets=False):
-    print("Wiping...")
-    server = create_server(None, None, False)
+def wipe(data_dir=None, keep_buckets=False):
+    keep_str = " while keeping the buckets" if keep_buckets else ""
+    print(f"Wiping...{keep_str}")
+    server = create_server(None, None, False, data_dir=data_dir)
     server.wipe(keep_buckets=keep_buckets)
     print("Done.")
     return 0
@@ -29,6 +30,9 @@ def wipe(keep_buckets=False):
 
 def prepare_args_parser():
     parser = argparse.ArgumentParser(description="Google Cloud Storage Emulator")
+    parser.add_argument(
+        "-d", "--data-dir", default=None, help="directory to use as the storage root"
+    )
     subparsers = parser.add_subparsers(title="subcommands", dest="subcommand")
 
     start = subparsers.add_parser("start", help="start the emulator")
@@ -57,9 +61,6 @@ def prepare_args_parser():
         default=False,
         help="use in-memory storage",
     )
-    start.add_argument(
-        "-D", "--data-dir", default=None, help="directory to use as the storage root"
-    )
 
     wipe = subparsers.add_parser("wipe", help="Wipe the local data")
     wipe.add_argument(
@@ -70,7 +71,11 @@ def prepare_args_parser():
     )
 
     create_bucket = subparsers.add_parser("create_bucket", help="create bucket")
-    create_bucket.add_argument("-n", "--name", help="Name of the new bucket")
+    # -n, --name deprecated
+    create_bucket.add_argument(
+        "-n", "--name", action="store_true", help=argparse.SUPPRESS
+    )
+    create_bucket.add_argument("name", help="Name of the new bucket")
 
     return parser, subparsers
 
@@ -87,13 +92,13 @@ def main(args=sys.argv[1:], test_mode=False):
             "This operation will IRREVERSIBLY DELETE all your data. Do you wish to proceed? [y/N] "
         )
         if answer.lower() in ("y", "ye", "yes"):
-            sys.exit(wipe(keep_buckets=args.keep_buckets))
+            sys.exit(wipe(data_dir=args.data_dir, keep_buckets=args.keep_buckets))
         else:
             print("wipe command cancelled")
             sys.exit(1)
 
     if args.subcommand == "create_bucket":
-        storage = Storage(use_memory_fs=args.no_store_on_disk, data_dir=args.data_dir)
+        storage = Storage(data_dir=args.data_dir)
         create_bucket(args.name, storage)
         sys.exit(1)
 
@@ -105,7 +110,7 @@ def main(args=sys.argv[1:], test_mode=False):
     else:
         root.setLevel(logging.DEBUG)
     server = get_server(
-        args.host, args.port, args.no_store_on_disk, args.default_bucket
+        args.host, args.port, args.no_store_on_disk, args.default_bucket, args.data_dir
     )
     if test_mode:
         return server

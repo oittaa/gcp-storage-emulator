@@ -73,6 +73,7 @@ class Storage(object):
         if self._use_memory_fs:
             return "mem://"
         else:
+            os.makedirs(self._data_dir, exist_ok=True)
             return self._data_dir
 
     def get_bucket(self, bucket_name):
