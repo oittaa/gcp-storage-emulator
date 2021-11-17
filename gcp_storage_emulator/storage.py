@@ -2,12 +2,16 @@ import datetime
 import json
 import logging
 import os
+from hashlib import sha256
 
 import fs
 from fs.errors import FileExpected, ResourceNotFound
 
 from gcp_storage_emulator.exceptions import Conflict, NotFound
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
+
+# Real buckets can't start with an underscore
+RESUMABLE_DIR = "_resumable"
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +189,7 @@ class Storage(object):
             self.objects[bucket_name] = bucket_objects
             if file_id:
                 self.delete_resumable_file_obj(file_id)
+                self._delete_file(RESUMABLE_DIR, self.safe_id(file_id))
             self._write_config_to_file()
 
     def create_resumable_upload(self, bucket_name, file_name, file_obj):
@@ -216,6 +221,39 @@ class Storage(object):
         self.resumable[file_id] = file_obj
         self._write_config_to_file()
         return file_id
+
+    def add_to_resumable_upload(self, file_id, content, total_size):
+        """Add data to partial resumable download.
+
+        We can't use 'seek' to append since memory store seems to erase
+        everything in those cases. That's why the previous part is loaded
+        and rewritten again.
+
+         Arguments:
+            file_id {str} -- Resumable file id
+            content {bytes} -- Content of the file to write
+            total_size {int} -- Total object size
+
+
+        Raises:
+            NotFound: Raised when the object doesn't exist
+
+        Returns:
+            bytes -- Raw content of the file if completed, None otherwise
+        """
+        safe_id = self.safe_id(file_id)
+        try:
+            file_content = self.get_file(RESUMABLE_DIR, safe_id)
+        except NotFound:
+            file_content = b""
+        file_content += content
+        file_dir = self._get_or_create_dir(RESUMABLE_DIR, safe_id)
+        with file_dir.open(safe_id, mode="wb") as file:
+            file.write(file_content)
+        size = len(file_content)
+        if size == total_size:
+            return file_content
+        return None
 
     def get_file_obj(self, bucket_name, file_name):
         """Gets the meta information for a file within a bucket
@@ -389,3 +427,19 @@ class Storage(object):
             bucket_objects[file_name] = file_obj
             self.objects[bucket_name] = bucket_objects
             self._write_config_to_file()
+
+    @staticmethod
+    def safe_id(file_id):
+        """Safe string from the resumable file_id
+
+        We can't use 'seek' to append since memory store seems to erase
+        everything in those cases. That's why the previous part is loaded
+        and rewritten again.
+
+         Arguments:
+            file_id {str} -- Resumable file id
+
+        Returns:
+            str -- Safe string to use in the file system
+        """
+        return sha256(file_id.encode("utf-8")).hexdigest()
