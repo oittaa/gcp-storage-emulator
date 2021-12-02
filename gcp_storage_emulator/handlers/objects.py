@@ -258,7 +258,7 @@ def upload_partial(request, response, storage, *args, **kwargs):
             m_dict = match.groupdict()
             total_size = int(m_dict["total_size"])
             data = storage.add_to_resumable_upload(upload_id, request.data, total_size)
-            if not data:
+            if data is None:
                 response.status = GoogleHTTPStatus.RESUME_INCOMPLETE
                 response["Range"] = "bytes=0-{}".format(m_dict["end"])
                 return
