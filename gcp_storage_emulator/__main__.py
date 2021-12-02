@@ -100,7 +100,7 @@ def main(args=sys.argv[1:], test_mode=False):
     if args.subcommand == "create_bucket":
         storage = Storage(data_dir=args.data_dir)
         create_bucket(args.name, storage)
-        sys.exit(1)
+        sys.exit(0)
 
     root = logging.getLogger("")
     stream_handler = logging.StreamHandler()
