@@ -251,8 +251,8 @@ class Storage(object):
         with file_dir.open(safe_id, mode="wb") as file:
             file.write(file_content)
         size = len(file_content)
-        if size == total_size:
-            return file_content
+        if size >= total_size:
+            return file_content[:total_size]
         return None
 
     def get_file_obj(self, bucket_name, file_name):
@@ -431,10 +431,6 @@ class Storage(object):
     @staticmethod
     def safe_id(file_id):
         """Safe string from the resumable file_id
-
-        We can't use 'seek' to append since memory store seems to erase
-        everything in those cases. That's why the previous part is loaded
-        and rewritten again.
 
          Arguments:
             file_id {str} -- Resumable file id
