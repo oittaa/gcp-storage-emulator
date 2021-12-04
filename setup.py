@@ -49,8 +49,13 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ],
-    scripts=["bin/gcp-storage-emulator", "bin/gcp-storage-emulator.py"],
+    entry_points={
+        "console_scripts": [
+            "gcp-storage-emulator=gcp_storage_emulator.__main__:main",
+        ],
+    },
     setup_requires=[
         "wheel",
     ],
