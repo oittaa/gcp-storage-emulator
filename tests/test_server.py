@@ -772,6 +772,14 @@ class ObjectsTests(ServerBaseCase):
         self.assertEqual(len(fetched_content), len(content))
         self.assertEqual(fetched_content, content)
 
+    def test_empty_blob(self):
+        bucket = self._client.create_bucket("testbucket")
+        bucket.blob("empty_blob").open("w").close()
+
+        blob = bucket.get_blob("empty_blob")
+        fetched_content = blob.download_as_bytes()
+        self.assertEqual(fetched_content, b"")
+
 
 class HttpEndpointsTest(ServerBaseCase):
     """Tests for the HTTP endpoints defined by server.HANDLERS."""

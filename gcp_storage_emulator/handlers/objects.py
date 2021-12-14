@@ -263,7 +263,7 @@ def upload_partial(request, response, storage, *args, **kwargs):
                 response["Range"] = "bytes=0-{}".format(m_dict["end"])
                 return
         else:
-            data = request.data
+            data = request.data or b""
 
         obj = _checksums(data, obj)
         obj["size"] = str(len(data))
