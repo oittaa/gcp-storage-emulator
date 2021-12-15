@@ -8,11 +8,13 @@ import string
 import time
 import urllib.parse
 from base64 import b64encode
+from copy import deepcopy
 from datetime import datetime, timezone
 from enum import IntEnum
 from http import HTTPStatus
 
 import google_crc32c
+
 from gcp_storage_emulator.exceptions import Conflict, NotFound
 
 logger = logging.getLogger("api.object")
@@ -68,7 +70,7 @@ class GoogleHTTPStatus(IntEnum):
 def _handle_conflict(response, err):
     msg = str(err)
     response.status = HTTPStatus.BAD_REQUEST
-    resp = BAD_REQUEST
+    resp = deepcopy(BAD_REQUEST)
     resp["error"]["message"] = msg
     resp["error"]["errors"][0]["message"] = msg
     response.json(resp)
@@ -464,7 +466,7 @@ def batch(request, response, storage, *args, **kwargs):
                 response.write("Content-Type: application/json; charset=UTF-8\r\n")
         if not resp_data:
             msg = "No such object: {}/{}".format(bucket_name, object_id)
-            resp_data = NOT_FOUND
+            resp_data = deepcopy(NOT_FOUND)
             resp_data["error"]["message"] = msg
             resp_data["error"]["errors"][0]["message"] = msg
             response.write("HTTP/1.1 404 Not Found\r\n")
