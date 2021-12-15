@@ -7,8 +7,8 @@ import time
 import zlib
 from email.parser import BytesParser
 from functools import partial
-from http import server, HTTPStatus
-from urllib.parse import parse_qs, urlparse, unquote
+from http import HTTPStatus, server
+from urllib.parse import parse_qs, unquote, urlparse
 
 from gcp_storage_emulator import settings
 from gcp_storage_emulator.handlers import buckets, objects
