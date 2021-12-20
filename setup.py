@@ -28,7 +28,7 @@ setup(
     url=URL,
     author=AUTHOR,
     author_email=AUTHOR_EMAIL,
-    packages=find_packages(),
+    packages=PACKAGES,
     zip_safe=False,
     keywords=[
         "Google Cloud Storage",
@@ -56,9 +56,6 @@ setup(
             "gcp-storage-emulator=gcp_storage_emulator.__main__:main",
         ],
     },
-    setup_requires=[
-        "wheel",
-    ],
     install_requires=[
         "fs==2.4.14",
         "google-crc32c==1.3.0",

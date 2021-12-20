@@ -1,0 +1,11 @@
+[build-system]
+requires = [
+    "setuptools==60.0.0",
+    "wheel==0.37.0"
+]
+
+[tool.pytest.ini_options]
+addopts = "--cov=gcp_storage_emulator --cov-report=xml --cov-branch"
+testpaths = [
+    "tests"
+]
