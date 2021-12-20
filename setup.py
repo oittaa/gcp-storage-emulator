@@ -45,7 +45,6 @@ setup(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
@@ -60,5 +59,5 @@ setup(
         "fs==2.4.14",
         "google-crc32c==1.3.0",
     ],
-    python_requires=">=3.6",
+    python_requires=">=3.7",
 )
