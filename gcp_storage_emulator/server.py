@@ -2,6 +2,7 @@ import gzip
 import json
 import logging
 import re
+import sys
 import threading
 import time
 import zlib
@@ -303,7 +304,10 @@ class Response(object):
 
         self._handler.send_header("Content-Length", str(len(content)))
         self._handler.end_headers()
-        self._handler.wfile.write(content)
+        try:
+            self._handler.wfile.write(content)
+        except BrokenPipeError:
+            sys.stdout = None
 
 
 class Router(object):
