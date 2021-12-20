@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: ['3.6', '3.7', '3.8', '3.9', '3.10', 'pypy-3.7']
+        python-version: ['3.7', '3.8', '3.9', '3.10', 'pypy-3.7']
     steps:
       - uses: actions/checkout@v2.4.0
       - name: Set up Python ${{ matrix.python-version }}
@@ -37,10 +37,10 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           # The GitHub editor is 127 chars wide
           flake8 . --count --max-complexity=10 --max-line-length=127 --statistics
+      - name: Install package
+        run: pip install .
       - name: Test with pytest
-        run: |
-          pip install .
-          pytest --cov=gcp_storage_emulator --cov-report=xml tests/
+        run: pytest
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v2.1.0
         with:
