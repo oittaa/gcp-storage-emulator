@@ -83,7 +83,8 @@ This can also be achieved (e.g. during tests) by hitting the `/wipe` endpoint
 Create a test file `emulator-test.py`.
 
 ```python
-from google.auth.credentials import AnonymousCredentials
+import os
+
 from google.cloud import storage
 from gcp_storage_emulator.server import create_server
 
@@ -95,10 +96,12 @@ BUCKET = "test-bucket"
 server = create_server(HOST, PORT, in_memory=True, default_bucket=BUCKET)
 server.start()
 
-client = storage.Client(
-    credentials=AnonymousCredentials(),
-    project="test",
-)
+# Avoid authentication when connecting to a storage emulator
+# https://github.com/googleapis/python-storage/issues/324
+os.environ["STORAGE_EMULATOR_HOST"] = f"http://{HOST}:{PORT}"
+client = storage.Client.create_anonymous_client()
+client.project = "test"
+
 bucket = client.bucket(BUCKET)
 blob = bucket.blob("blob1")
 blob.upload_from_string("test1")
@@ -106,7 +109,7 @@ blob = bucket.blob("blob2")
 blob.upload_from_string("test2")
 for blob in bucket.list_blobs():
     content = blob.download_as_bytes()
-    print("Blob [{}]: {}".format(blob.name, content))
+    print(f"Blob [{blob.name}]: {content}")
 
 server.stop()
 ```
@@ -114,7 +117,6 @@ server.stop()
 Run the following commands to test the emulated storage.
 
 ```bash
-export STORAGE_EMULATOR_HOST=http://localhost:9023
 python3 emulator-test.py
 ```
 
@@ -129,10 +131,36 @@ docker pull oittaa/gcp-storage-emulator
 
 Inside the container instance, the value of the `PORT` environment variable always reflects the port to which requests are sent. It defaults to `8080`. The directory used for the emulated storage is located under `/storage` in the container. In the following example the host's directory `$(pwd)/cloudstorage` will be bound to the emulated storage.
 
-```
+```bash
 docker run -d \
-  -p 8080:8080 \
+  -e PORT=9023 \
+  -p 9023:9023 \
   --name gcp-storage-emulator \
   -v "$(pwd)/cloudstorage":/storage \
   oittaa/gcp-storage-emulator
+```
+
+```python
+import os
+
+from google.cloud import exceptions, storage
+
+HOST = "localhost"
+PORT = 9023
+BUCKET = "test-bucket"
+
+# Avoid authentication when connecting to a storage emulator
+# https://github.com/googleapis/python-storage/issues/324
+os.environ["STORAGE_EMULATOR_HOST"] = f"http://{HOST}:{PORT}"
+client = storage.Client.create_anonymous_client()
+client.project = "test"
+
+try:
+    bucket = client.create_bucket(BUCKET)
+except exceptions.Conflict:
+    bucket = client.bucket(BUCKET)
+
+blob = bucket.blob("blob1")
+blob.upload_from_string("test1")
+print(blob.download_as_bytes())
 ```
