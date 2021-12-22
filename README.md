@@ -76,11 +76,9 @@ server.stop()
 
 You can wipe the data by calling `server.wipe()`
 
-This can also be achieved (e.g. during tests) by hitting the `/wipe` endpoint
+This can also be achieved (e.g. during tests) by hitting the `/wipe` HTTP endpoint
 
 #### Example
-
-Create a test file `emulator-test.py`.
 
 ```python
 import os
@@ -113,13 +111,6 @@ for blob in bucket.list_blobs():
 
 server.stop()
 ```
-
-Run the following commands to test the emulated storage.
-
-```bash
-python3 emulator-test.py
-```
-
 
 ## Docker
 
