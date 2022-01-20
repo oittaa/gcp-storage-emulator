@@ -94,11 +94,8 @@ BUCKET = "test-bucket"
 server = create_server(HOST, PORT, in_memory=True, default_bucket=BUCKET)
 server.start()
 
-# Avoid authentication when connecting to a storage emulator
-# https://github.com/googleapis/python-storage/issues/324
 os.environ["STORAGE_EMULATOR_HOST"] = f"http://{HOST}:{PORT}"
-client = storage.Client.create_anonymous_client()
-client.project = "test"
+client = storage.Client()
 
 bucket = client.bucket(BUCKET)
 blob = bucket.blob("blob1")
@@ -140,11 +137,8 @@ HOST = "localhost"
 PORT = 9023
 BUCKET = "test-bucket"
 
-# Avoid authentication when connecting to a storage emulator
-# https://github.com/googleapis/python-storage/issues/324
 os.environ["STORAGE_EMULATOR_HOST"] = f"http://{HOST}:{PORT}"
-client = storage.Client.create_anonymous_client()
-client.project = "test"
+client = storage.Client()
 
 try:
     bucket = client.create_bucket(BUCKET)
