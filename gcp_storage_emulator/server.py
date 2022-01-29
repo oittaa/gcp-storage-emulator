@@ -85,8 +85,11 @@ HANDLERS = (
     # Internal API, not supported by the real GCS
     (r"^/$", {GET: _health_check}),  # Health check endpoint
     (r"^/wipe$", {GET: _wipe_data}),  # Wipe all data
-    # Public file serving, same as object.download
-    (r"^/(?P<bucket_name>[-.\w]+)/(?P<object_id>.*[^/]+)$", {GET: objects.download}),
+    # Public file serving, same as object.download and signed URLs
+    (
+        r"^/(?P<bucket_name>[-.\w]+)/(?P<object_id>.*[^/]+)$",
+        {GET: objects.download, PUT: objects.xml_upload},
+    ),
 )
 
 BATCH_HANDLERS = (
@@ -161,15 +164,12 @@ def _decode_raw_data(raw_data, request_handler):
 
 
 def _read_data(request_handler):
-    if not request_handler.headers["Content-Type"]:
-        return None
-
     raw_data = _decode_raw_data(_read_raw_data(request_handler), request_handler)
 
     if not raw_data:
         return None
 
-    content_type = request_handler.headers["Content-Type"]
+    content_type = request_handler.headers["Content-Type"] or "application/octet-stream"
 
     if content_type.startswith("application/json"):
         return json.loads(raw_data)
