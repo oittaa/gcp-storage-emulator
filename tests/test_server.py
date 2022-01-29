@@ -13,6 +13,9 @@ from gcp_storage_emulator.server import create_server
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
 
 
+TEST_TEXT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_text.txt")
+
+
 class FakeSigningCredentials(Signing, AnonymousCredentials):
     def sign_bytes(self, message):
         return b"foobar"
@@ -182,18 +185,15 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(read_content, content)
 
     def test_upload_from_text_file(self):
-        text_test = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "test_text.txt"
-        )
         bucket = self._client.create_bucket("testbucket")
         blob = bucket.blob("test_text.txt")
-        with open(text_test, "rb") as file:
+        with open(TEST_TEXT, "rb") as file:
             blob.upload_from_file(file)
 
             with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
                 read_content = pwd.readtext("testbucket/test_text.txt")
 
-        with open(text_test, "rb") as file:
+        with open(TEST_TEXT, "rb") as file:
             expected_content = str(file.read(), encoding="utf-8")
             self.assertEqual(read_content, expected_content)
 
@@ -480,20 +480,17 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(fetched_file.getvalue(), file.read())
 
     def test_download_text_to_file(self):
-        test_text = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "test_text.txt"
-        )
         bucket = self._client.create_bucket("testbucket")
 
         blob = bucket.blob("text.txt")
-        with open(test_text, "rb") as file:
+        with open(TEST_TEXT, "rb") as file:
             blob.upload_from_file(file, content_type="text/plain; charset=utf-8")
 
         blob = bucket.get_blob("text.txt")
         fetched_file = BytesIO()
         blob.download_to_file(fetched_file)
 
-        with open(test_text, "rb") as file:
+        with open(TEST_TEXT, "rb") as file:
             self.assertEqual(fetched_file.getvalue(), file.read())
 
     def test_delete_object(self):
@@ -815,11 +812,7 @@ class ObjectsTests(ServerBaseCase):
         self.assertEqual(response.headers["content-type"], "text/mycustom")
 
     def test_signed_url_upload(self):
-        test_text = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "test_text.txt"
-        )
         bucket = self._client.create_bucket("testbucket")
-
         blob = bucket.blob("signed-upload")
         url = blob.generate_signed_url(
             api_access_endpoint="http://localhost:9023",
@@ -828,8 +821,7 @@ class ObjectsTests(ServerBaseCase):
             expiration=datetime.timedelta(minutes=15),
             method="PUT",
         )
-
-        with open(test_text, "rb") as file:
+        with open(TEST_TEXT, "rb") as file:
             headers = {"Content-type": "text/plain"}
             response = requests.put(url, data=file, headers=headers)
             self.assertEqual(response.status_code, 200)
@@ -840,9 +832,6 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(blob.content_type, "text/plain")
 
     def test_signed_url_upload_to_nonexistent_bucket(self):
-        test_text = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "test_text.txt"
-        )
         bucket = self._client.bucket("non-existent-test-bucket")
         blob = bucket.blob("idonotexisteither")
         url = blob.generate_signed_url(
@@ -852,7 +841,7 @@ class ObjectsTests(ServerBaseCase):
             expiration=datetime.timedelta(minutes=15),
             method="PUT",
         )
-        with open(test_text, "rb") as file:
+        with open(TEST_TEXT, "rb") as file:
             response = requests.put(url, data=file)
             self.assertEqual(response.status_code, 404)
 
