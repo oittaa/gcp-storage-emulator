@@ -799,7 +799,7 @@ class ObjectsTests(ServerBaseCase):
         bucket = self._client.create_bucket("testbucket")
 
         blob = bucket.blob("signed-download")
-        blob.upload_from_string(content)
+        blob.upload_from_string(content, content_type="text/mycustom")
 
         url = blob.generate_signed_url(
             api_access_endpoint="http://localhost:9023",
@@ -810,7 +810,9 @@ class ObjectsTests(ServerBaseCase):
         )
 
         response = requests.get(url)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, content)
+        self.assertEqual(response.headers["content-type"], "text/mycustom")
 
     def test_signed_url_upload(self):
         test_text = os.path.join(
@@ -836,6 +838,23 @@ class ObjectsTests(ServerBaseCase):
             file.seek(0)
             self.assertEqual(blob_content, file.read())
             self.assertEqual(blob.content_type, "text/plain")
+
+    def test_signed_url_upload_to_nonexistent_bucket(self):
+        test_text = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "test_text.txt"
+        )
+        bucket = self._client.bucket("non-existent-test-bucket")
+        blob = bucket.blob("idonotexisteither")
+        url = blob.generate_signed_url(
+            api_access_endpoint="http://localhost:9023",
+            credentials=FakeSigningCredentials(),
+            version="v4",
+            expiration=datetime.timedelta(minutes=15),
+            method="PUT",
+        )
+        with open(test_text, "rb") as file:
+            response = requests.put(url, data=file)
+            self.assertEqual(response.status_code, 404)
 
 
 class HttpEndpointsTest(ServerBaseCase):
