@@ -231,6 +231,28 @@ def _patch(storage, bucket_name, object_id, metadata):
         return None
 
 
+def xml_upload(request, response, storage, *args, **kwargs):
+    content_type = request.get_header("Content-Type", "application/octet-stream")
+    obj = _make_object_resource(
+        request.base_url,
+        request.params["bucket_name"],
+        request.params["object_id"],
+        content_type,
+        str(len(request.data)),
+    )
+    try:
+        obj = _checksums(request.data, obj)
+        storage.create_file(
+            request.params["bucket_name"],
+            request.params["object_id"],
+            request.data,
+            obj,
+        )
+
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
+
+
 def insert(request, response, storage, *args, **kwargs):
     uploadType = request.query.get("uploadType")
 

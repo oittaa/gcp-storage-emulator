@@ -7,9 +7,23 @@ from unittest import TestCase as BaseTestCase
 import fs
 import requests
 from google.api_core.exceptions import BadRequest, Conflict, NotFound
+from google.auth.credentials import AnonymousCredentials, Signing
 
 from gcp_storage_emulator.server import create_server
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
+
+
+class FakeSigningCredentials(Signing, AnonymousCredentials):
+    def sign_bytes(self, message):
+        return b"foobar"
+
+    @property
+    def signer_email(self):
+        return "foobar@example.tld"
+
+    @property
+    def signer(self):
+        pass
 
 
 def _get_storage_client(http):
@@ -779,6 +793,49 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.get_blob("empty_blob")
         fetched_content = blob.download_as_bytes()
         self.assertEqual(fetched_content, b"")
+
+    def test_signed_url_download(self):
+        content = b"The quick brown fox jumps over the lazy dog"
+        bucket = self._client.create_bucket("testbucket")
+
+        blob = bucket.blob("signed-download")
+        blob.upload_from_string(content)
+
+        url = blob.generate_signed_url(
+            api_access_endpoint="http://localhost:9023",
+            credentials=FakeSigningCredentials(),
+            version="v4",
+            expiration=datetime.timedelta(minutes=15),
+            method="GET",
+        )
+
+        response = requests.get(url)
+        self.assertEqual(response.content, content)
+
+    def test_signed_url_upload(self):
+        test_text = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "test_text.txt"
+        )
+        bucket = self._client.create_bucket("testbucket")
+
+        blob = bucket.blob("signed-upload")
+        url = blob.generate_signed_url(
+            api_access_endpoint="http://localhost:9023",
+            credentials=FakeSigningCredentials(),
+            version="v4",
+            expiration=datetime.timedelta(minutes=15),
+            method="PUT",
+        )
+
+        with open(test_text, "rb") as file:
+            headers = {"Content-type": "text/plain"}
+            response = requests.put(url, data=file, headers=headers)
+            self.assertEqual(response.status_code, 200)
+
+            blob_content = blob.download_as_bytes()
+            file.seek(0)
+            self.assertEqual(blob_content, file.read())
+            self.assertEqual(blob.content_type, "text/plain")
 
 
 class HttpEndpointsTest(ServerBaseCase):
