@@ -839,7 +839,7 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(blob_content, file.read())
             self.assertEqual(blob.content_type, "text/plain")
 
-    def test_signel_upload_to_nonexistent_bucket(self):
+    def test_signed_url_upload_to_nonexistent_bucket(self):
         test_text = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "test_text.txt"
         )
