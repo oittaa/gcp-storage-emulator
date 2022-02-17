@@ -156,10 +156,14 @@ def _make_object_resource(
 
 
 def _multipart_upload(request, response, storage):
+    object_id = request.data["meta"].get("name")
+    # Overrides the object metadata's name value, if any.
+    if "name" in request.query:
+        object_id = request.query["name"][0]
     obj = _make_object_resource(
         request.base_url,
         request.params["bucket_name"],
-        request.data["meta"]["name"],
+        object_id,
         request.data["content-type"],
         str(len(request.data["content"])),
         request.data["meta"],
@@ -168,7 +172,7 @@ def _multipart_upload(request, response, storage):
         obj = _checksums(request.data["content"], obj)
         storage.create_file(
             request.params["bucket_name"],
-            request.data["meta"]["name"],
+            object_id,
             request.data["content"],
             obj,
         )
@@ -181,6 +185,10 @@ def _multipart_upload(request, response, storage):
 
 
 def _create_resumable_upload(request, response, storage):
+    object_id = request.data.get("name")
+    # Overrides the object metadata's name value, if any.
+    if "name" in request.query:
+        object_id = request.query["name"][0]
     content_type = request.get_header(
         "x-upload-content-type", "application/octet-stream"
     )
@@ -188,14 +196,14 @@ def _create_resumable_upload(request, response, storage):
     obj = _make_object_resource(
         request.base_url,
         request.params["bucket_name"],
-        request.data["name"],
+        object_id,
         content_type,
         content_length,
     )
     try:
         id = storage.create_resumable_upload(
             request.params["bucket_name"],
-            request.data["name"],
+            object_id,
             obj,
         )
         encoded_id = urllib.parse.urlencode(
