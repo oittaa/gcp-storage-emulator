@@ -137,7 +137,7 @@ def _read_raw_data(request_handler):
 
         while True:
             line = request_handler.rfile.readline().strip()
-            chunk_size = int(line, 16)
+            chunk_size = int(line, 16) if line else 0
             if chunk_size == 0:
                 break
 
