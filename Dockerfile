@@ -10,7 +10,8 @@ ENV STORAGE_DIR storage
 
 # Python app installation
 WORKDIR $APP_HOME
-COPY . ./
+COPY README.md pyproject.toml setup.py ./
+COPY gcp_storage_emulator gcp_storage_emulator/
 RUN pip install .
 
 ENTRYPOINT ["gcp-storage-emulator"]
