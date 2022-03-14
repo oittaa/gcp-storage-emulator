@@ -185,7 +185,8 @@ def _multipart_upload(request, response, storage):
 
 
 def _create_resumable_upload(request, response, storage):
-    object_id = request.data.get("name")
+    if request.data:
+        object_id = request.data.get("name")
     # Overrides the object metadata's name value, if any.
     if "name" in request.query:
         object_id = request.query["name"][0]
