@@ -845,6 +845,15 @@ class ObjectsTests(ServerBaseCase):
             response = requests.put(url, data=file)
             self.assertEqual(response.status_code, 404)
 
+    def test_initiate_resumable_upload_without_metadata(self):
+        self._client.create_bucket("test_bucket")
+        headers = {"Content-type": "application/json"}
+        response = requests.post(
+            "http://127.0.0.1:9023/upload/storage/v1/b/test_bucket/o?uploadType=resumable&name=test_file",
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
 
 class HttpEndpointsTest(ServerBaseCase):
     """Tests for the HTTP endpoints defined by server.HANDLERS."""
