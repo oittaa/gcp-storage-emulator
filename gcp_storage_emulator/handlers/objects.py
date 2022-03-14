@@ -185,6 +185,9 @@ def _multipart_upload(request, response, storage):
 
 
 def _create_resumable_upload(request, response, storage):
+    # Workaround for libraries using POST method when they should be using PUT.
+    if "upload_id" in request.query:
+        return upload_partial(request, response, storage)
     if request.data:
         object_id = request.data.get("name")
     # Overrides the object metadata's name value, if any.
