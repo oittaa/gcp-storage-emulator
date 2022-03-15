@@ -139,7 +139,6 @@ BUCKET = "test-bucket"
 
 os.environ["STORAGE_EMULATOR_HOST"] = f"http://{HOST}:{PORT}"
 client = storage.Client()
-client.project = "test"
 
 try:
     bucket = client.create_bucket(BUCKET)
