@@ -155,16 +155,51 @@ def _make_object_resource(
     return obj
 
 
+def _content_type_from_request(request, default=None):
+    if "contentEncoding" in request.query:
+        return request.query["contentEncoding"][0]
+    return default
+
+
+def _media_upload(request, response, storage):
+    object_id = request.query["name"][0]
+    content_type = _content_type_from_request(
+        request, request.get_header("content-type")
+    )
+    obj = _make_object_resource(
+        request.base_url,
+        request.params["bucket_name"],
+        object_id,
+        content_type,
+        str(len(request.data)),
+    )
+    try:
+        obj = _checksums(request.data, obj)
+        storage.create_file(
+            request.params["bucket_name"],
+            object_id,
+            request.data,
+            obj,
+        )
+
+        response.json(obj)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
+    except Conflict as err:
+        _handle_conflict(response, err)
+
+
 def _multipart_upload(request, response, storage):
     object_id = request.data["meta"].get("name")
     # Overrides the object metadata's name value, if any.
     if "name" in request.query:
         object_id = request.query["name"][0]
+    content_type = _content_type_from_request(request, request.data["content-type"])
     obj = _make_object_resource(
         request.base_url,
         request.params["bucket_name"],
         object_id,
-        request.data["content-type"],
+        content_type,
         str(len(request.data["content"])),
         request.data["meta"],
     )
@@ -193,8 +228,8 @@ def _create_resumable_upload(request, response, storage):
     # Overrides the object metadata's name value, if any.
     if "name" in request.query:
         object_id = request.query["name"][0]
-    content_type = request.get_header(
-        "x-upload-content-type", "application/octet-stream"
+    content_type = _content_type_from_request(
+        request, request.get_header("x-upload-content-type", "application/octet-stream")
     )
     content_length = request.get_header("x-upload-content-length", None)
     obj = _make_object_resource(
@@ -273,6 +308,9 @@ def insert(request, response, storage, *args, **kwargs):
         return
 
     uploadType = uploadType[0]
+
+    if uploadType == "media":
+        return _media_upload(request, response, storage)
 
     if uploadType == "resumable":
         return _create_resumable_upload(request, response, storage)
