@@ -846,13 +846,26 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(response.status_code, 404)
 
     def test_initiate_resumable_upload_without_metadata(self):
+        url = "http://127.0.0.1:9023/upload/storage/v1/b/test_bucket/o?"
+        url += "uploadType=resumable&name=test_file"
         self._client.create_bucket("test_bucket")
         headers = {"Content-type": "application/json"}
-        response = requests.post(
-            "http://127.0.0.1:9023/upload/storage/v1/b/test_bucket/o?uploadType=resumable&name=test_file",
-            headers=headers,
-        )
+        response = requests.post(url, headers=headers)
         self.assertEqual(response.status_code, 200)
+
+    def test_media_upload_without_metadata(self):
+        url = "http://127.0.0.1:9023/upload/storage/v1/b/test_bucket/o?"
+        url += "uploadType=media&name=test_file&contentEncoding=text%2Fplain"
+        bucket = self._client.create_bucket("test_bucket")
+        with open(TEST_TEXT, "rb") as file:
+            headers = {"Content-type": "text/html"}
+            response = requests.post(url, data=file, headers=headers)
+            self.assertEqual(response.status_code, 200)
+            blob = bucket.blob("test_file")
+            blob_content = blob.download_as_bytes()
+            file.seek(0)
+            self.assertEqual(blob_content, file.read())
+            self.assertEqual(blob.content_type, "text/plain")
 
 
 class HttpEndpointsTest(ServerBaseCase):
