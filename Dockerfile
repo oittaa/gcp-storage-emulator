@@ -1,4 +1,4 @@
-FROM python:3.10.3-slim
+FROM python:3.10.4-slim
 
 # Allow statements and log messages to immediately appear in the Knative logs
 ENV PYTHONUNBUFFERED True
