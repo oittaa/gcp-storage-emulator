@@ -163,7 +163,7 @@ def _decode_raw_data(raw_data, request_handler):
     return raw_data
 
 
-def _read_data(request_handler):
+def _read_data(request_handler, query):
     raw_data = _decode_raw_data(_read_raw_data(request_handler), request_handler)
 
     if not raw_data:
@@ -171,7 +171,7 @@ def _read_data(request_handler):
 
     content_type = request_handler.headers["Content-Type"] or "application/octet-stream"
 
-    if content_type.startswith("application/json"):
+    if content_type.startswith("application/json") and "upload_id" not in query:
         return json.loads(raw_data)
 
     if content_type.startswith("multipart/"):
@@ -251,7 +251,7 @@ class Request(object):
     @property
     def data(self):
         if not self._data:
-            self._data = _read_data(self._request_handler)
+            self._data = _read_data(self._request_handler, self._query)
         return self._data
 
     def get_header(self, key, default=None):

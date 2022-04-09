@@ -867,6 +867,22 @@ class ObjectsTests(ServerBaseCase):
             self.assertEqual(blob_content, file.read())
             self.assertEqual(blob.content_type, "text/plain")
 
+    def test_upload_from_file_content_type_json(self):
+        file_name = "test.json"
+        content = b'[{"a": 1}]'
+        bucket = self._client.create_bucket("testbucket")
+        blob = bucket.blob(file_name)
+
+        with NamedTemporaryFile() as temp_file:
+            temp_file.write(content)
+            temp_file.flush()
+            temp_file.seek(0)
+            blob.upload_from_file(temp_file, content_type="application/json")
+
+        blob = bucket.get_blob(file_name)
+        self.assertEqual(blob.name, file_name)
+        self.assertEqual(blob.download_as_bytes(), content)
+
 
 class HttpEndpointsTest(ServerBaseCase):
     """Tests for the HTTP endpoints defined by server.HANDLERS."""

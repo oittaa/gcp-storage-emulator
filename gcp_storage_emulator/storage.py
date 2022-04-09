@@ -243,7 +243,7 @@ class Storage(object):
         """
         safe_id = self.safe_id(file_id)
         try:
-            file_content = self.get_file(RESUMABLE_DIR, safe_id)
+            file_content = self.get_file(RESUMABLE_DIR, safe_id, False)
         except NotFound:
             file_content = b""
         file_content += content
@@ -292,12 +292,13 @@ class Storage(object):
         except KeyError:
             raise NotFound
 
-    def get_file(self, bucket_name, file_name):
+    def get_file(self, bucket_name, file_name, show_error=True):
         """Get the raw data of a file within a bucket
 
         Arguments:
             bucket_name {str} -- Name of the bucket
             file_name {str} -- File name
+            show_error {bool} -- Show error if the file is missing
 
         Raises:
             NotFound: Raised when the object doesn't exist
@@ -310,8 +311,9 @@ class Storage(object):
             bucket_dir = self._fs.opendir(bucket_name)
             return bucket_dir.open(file_name, mode="rb").read()
         except (FileExpected, ResourceNotFound) as e:
-            logger.error("Resource not found:")
-            logger.error(e)
+            if show_error:
+                logger.error("Resource not found:")
+                logger.error(e)
             raise NotFound
 
     def delete_resumable_file_obj(self, file_id):
