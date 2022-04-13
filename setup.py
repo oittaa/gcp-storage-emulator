@@ -2,7 +2,7 @@ import os
 from setuptools import setup, find_packages
 
 NAME = "gcp-storage-emulator"
-PACKAGES = find_packages()
+PACKAGES = find_packages("src")
 
 DESCRIPTION = "A stub emulator for the Google Cloud Storage API"
 URL = "https://github.com/oittaa/gcp-storage-emulator"
@@ -29,6 +29,7 @@ setup(
     author=AUTHOR,
     author_email=AUTHOR_EMAIL,
     packages=PACKAGES,
+    package_dir={"": "src"},
     zip_safe=False,
     keywords=[
         "Google Cloud Storage",
