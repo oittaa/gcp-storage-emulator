@@ -38,7 +38,7 @@ jobs:
           # The GitHub editor is 127 chars wide
           flake8 . --count --max-complexity=10 --max-line-length=127 --statistics
       - name: Install package
-        run: pip install .
+        run: pip install -e .
       - name: Test with pytest
         run: pytest
       - name: Upload coverage to Codecov
