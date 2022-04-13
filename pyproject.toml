@@ -5,7 +5,7 @@ requires = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--cov=gcp_storage_emulator --cov-report=xml --cov-branch"
+addopts = "--cov=src --cov-report=xml --cov-branch"
 testpaths = [
     "tests"
 ]
