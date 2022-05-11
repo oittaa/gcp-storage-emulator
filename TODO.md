@@ -1,11 +1,12 @@
-get:
-    -
+### Error Handling for each route:
 
-ls:
-    -
+- get:
+    - ?
 
+- getbyid:
+    - ?
 
-insert:
+- insert:
     - check if bucket exists `CONFLICT`
     - check topic inside request.data `BAD_REQUEST`
     - check payload_format inside request.data `BAD_REQUEST`
@@ -13,5 +14,5 @@ insert:
     - check payload_format possible values `BAD_REQUEST`
     - check if topic exists `CONFLICT`
 
-delete:
-    -
+- delete:
+    - ?
