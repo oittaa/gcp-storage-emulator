@@ -11,7 +11,7 @@ from http import HTTPStatus, server
 from urllib.parse import parse_qs, unquote, urlparse
 
 from gcp_storage_emulator import settings
-from gcp_storage_emulator.handlers import buckets, objects
+from gcp_storage_emulator.handlers import buckets, objects, notifications
 from gcp_storage_emulator.storage import Storage
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,14 @@ HANDLERS = (
             settings.API_ENDPOINT
         ),
         {GET: objects.get, DELETE: objects.delete, PATCH: objects.patch},
+    ),
+    (
+        r"^{}/b/(?P<bucket_name>[-.\w]+)/notificationConfigs$".format(settings.API_ENDPOINT),
+        {GET: notifications.get, POST: notifications.insert},
+    ),
+    (
+        r"^{}/b/(?P<bucket_name>[-.\w]+)/notificationConfigs/(?P<object_id>.*[^/]+)$".format(settings.API_ENDPOINT),
+        {GET: notifications.getbyid, DELETE: notifications.delete},
     ),
     # Non-default API endpoints
     (

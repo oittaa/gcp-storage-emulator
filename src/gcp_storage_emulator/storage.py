@@ -38,6 +38,7 @@ class Storage(object):
             "buckets": self.buckets,
             "objects": self.objects,
             "resumable": self.resumable,
+            "notifications": self.notifications,
         }
 
         with self._fs.open(".meta", mode="w") as meta:
@@ -50,10 +51,12 @@ class Storage(object):
                 self.buckets = data.get("buckets")
                 self.objects = data.get("objects")
                 self.resumable = data.get("resumable")
+                self.notifications = data.get("notifications")
         except ResourceNotFound:
             self.buckets = {}
             self.objects = {}
             self.resumable = {}
+            self.notifications = {}
 
     def _get_or_create_dir(self, bucket_name, file_name):
         try:
@@ -441,3 +444,39 @@ class Storage(object):
             str -- Safe string to use in the file system
         """
         return sha256(file_id.encode("utf-8")).hexdigest()
+
+    def get_notifications(self, bucket_name, topic_name):
+        """Get the list of notification resource objects given the bucket name and topic name
+
+        Arguments:
+            bucket_name {str} -- Name of the bucket
+            topic_name {str} -- Name of the topic
+
+        Returns:
+            list -- list of GCS-like Notification resource
+        """
+
+        return self.notifications.get(bucket_name, {}).get(topic_name, [])
+
+    def create_notification(self, bucket_name, topic_name, notification_obj):
+        """Create a notification object representation and save it to the current fs
+
+        Arguments:
+            bucket_name {str} -- Name of the GCS bucket
+            topic_name {str} -- Nome of the PubSub topic
+            notification_obj {dict} -- GCS-like BucketNotification resource
+
+        Returns:
+            dict -- GCS-like Notification resource
+        """
+
+        if not self.notifications.get(bucket_name):
+            self.notifications[bucket_name] = {}
+
+        if not self.notifications[bucket_name].get(topic_name):
+            self.notifications[bucket_name][topic_name] = []
+
+        self.notifications[bucket_name][topic_name].append(notification_obj)
+
+        self._write_config_to_file()
+        return notification_obj
