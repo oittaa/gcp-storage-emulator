@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "You must specify a Cloud Pub/Sub topic in the 'topic' field.",
+        "errors": [
+            {
+                "message": "You must specify a Cloud Pub/Sub topic in the 'topic' field.",
+                "domain": "global",
+                "reason": "required"
+            }
+        ]
+    }
+}

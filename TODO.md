@@ -1,18 +1,23 @@
 ### Error Handling for each route:
 
-- get:
-    - ?
+- ls:
+    - bucket not found                                  404
+    - success                                           200
 
 - getbyid:
-    - ?
+    - bucket not found                                  404
+    - notification not found                            404
+    - success                                           200
 
 - insert:
-    - check if bucket exists `CONFLICT`
-    - check topic inside request.data `BAD_REQUEST`
-    - check payload_format inside request.data `BAD_REQUEST`
-    - check topic string format `BAD_REQUEST`
-    - check payload_format possible values `BAD_REQUEST`
-    - check if topic exists `CONFLICT`
+    - bucket not found                                  404
+    - mising topic                                      400
+    - missing or invalid value for payload format       400
+    - invalid topic                                     400
+    - topic not found                                   404
+    - success                                           201
 
 - delete:
-    - ?
+    - bucket not found                                  404
+    - notification not found                            404
+    - success                                           204

@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "Invalid Google Cloud Pub/Sub topic. It should look like '//pubsub.googleapis.com/projects/*/topics/*.'",
+        "errors": [
+            {
+                "message": "Invalid Google Cloud Pub/Sub topic. It should look like '//pubsub.googleapis.com/projects/*/topics/*.'",
+                "domain": "global",
+                "reason": "invalid"
+            }
+        ]
+    }
+}

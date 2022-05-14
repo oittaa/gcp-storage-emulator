@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "Cloud Pub/Sub topic '//pubsub.googleapis.com/projects/<project-id>/topics/<topic-name>' not found, or user '<user-id>@gs-project-accounts.iam.gserviceaccount.com' does not have permission to it.'",
+        "errors": [
+            {
+                "message": "Cloud Pub/Sub topic '//pubsub.googleapis.com/projects/<project-id>/topics/<topic-name>' not found, or user '<user-id>@gs-project-accounts.iam.gserviceaccount.com' does not have permission to it.'",
+                "domain": "global",
+                "reason": "invalid"
+            }
+        ]
+    }
+}

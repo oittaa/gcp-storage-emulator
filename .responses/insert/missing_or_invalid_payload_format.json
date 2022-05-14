@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "You must specify a payload format in the 'payload_format' field.",
+        "errors": [
+            {
+                "message": "You must specify a payload format in the 'payload_format' field.",
+                "domain": "global",
+                "reason": "required"
+            }
+        ]
+    }
+}
