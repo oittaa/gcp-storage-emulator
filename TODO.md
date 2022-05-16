@@ -9,9 +9,6 @@
     - notification not found                            404
     - success                                           200
 
-- insert:
-    - topic not found                                   404
-
 - delete:
     - bucket not found                                  404
     - notification not found                            404

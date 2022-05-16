@@ -1,6 +1,7 @@
 import re
 import logging
 from http import HTTPStatus
+import google.cloud.pubsub as pubsub
 from gcp_storage_emulator import settings
 
 
@@ -65,6 +66,20 @@ INVALID_TOPIC_ERROR = {
     }
 }
 
+TOPIC_NOT_FOUND_ERROR = {
+    "error": {
+        "code": 400,
+        "message": "Cloud Pub/Sub topic not found, or user does not have permission to it.'",
+        "errors": [
+            {
+                "message": "Cloud Pub/Sub topic not found, or user does not have permission to it.'",
+                "domain": "global",
+                "reason": "invalid"
+            }
+        ]
+    }
+}
+
 PAYLOAD_FORMATS = [
     "NONE",
     "JSON_API_V1"
@@ -78,6 +93,23 @@ EVENT_TYPES = [
 ]
 
 TOPIC_REGEX = r"//pubsub.googleapis.com/projects/(?P<project_id>.*[^/]+)/topics/(?P<topic_name>.*[^/]+)"
+
+
+def handle_event_types(event_types):
+    if type(event_types) != list:
+        event_types = []
+    event_types = [event_type for event_type in event_types if event_type in EVENT_TYPES]
+
+    return event_types
+
+
+def get_topic_configuration(topic):
+    publisher = pubsub.PublisherClient()
+
+    try:
+        return publisher.get_topic(request={"topic": topic})
+    except Exception:
+        return None
 
 
 def _make_notification_resource(bucket_name, topic, topic_name, payload_format, event_types, notification_id):
@@ -110,7 +142,6 @@ def create_notification(bucket_name, topic, topic_name, payload_format, event_ty
     notifications = storage.get_notifications(bucket_name, topic_name)
     last_notification_id = max([notification.get('id', 0) for notification in notifications], default="0")
     notification_id = str(int(last_notification_id) + 1)
-
     notification = _make_notification_resource(bucket_name, topic, topic_name, payload_format, event_types, notification_id)
     storage.create_notification(bucket_name, topic_name, notification)
     return notification
@@ -139,8 +170,6 @@ def insert(request, response, storage, *args, **kwargs):
 
         return
 
-    topic_name = topic_name_match.groupdict().get('topic_name')
-
     payload_format = request.data.get('payload_format')
     if payload_format not in PAYLOAD_FORMATS:
         response.status = HTTPStatus.BAD_REQUEST
@@ -148,15 +177,16 @@ def insert(request, response, storage, *args, **kwargs):
 
         return
 
-    # TODO Validate topic existence
+    if not get_topic_configuration(topic):
+        response.status = HTTPStatus.NOT_FOUND
+        response.json(TOPIC_NOT_FOUND_ERROR)
 
-    event_types = request.data.get('event_type')
-    if type(event_types) != list:
-        event_types = []
-    event_types = [event_type for event_type in event_types if event_type in EVENT_TYPES]
+        return
 
     logger.debug("[BUCKETS] Received request to create notification in bucket {}".format(bucket_name))
 
+    topic_name = topic_name_match.groupdict().get('topic_name')
+    event_types = handle_event_types(request.data.get('event_type'))
     notification = create_notification(bucket_name, topic, topic_name, payload_format, event_types, storage)
 
     response.json(notification)
