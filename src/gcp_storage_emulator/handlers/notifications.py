@@ -148,7 +148,7 @@ def insert(request, response, storage, *args, **kwargs):
 
         return
 
-    # TODO Validate topic name existence
+    # TODO Validate topic existence
 
     event_types = request.data.get('event_type')
     if type(event_types) != list:
