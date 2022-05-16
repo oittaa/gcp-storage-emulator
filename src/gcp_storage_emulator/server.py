@@ -69,11 +69,11 @@ HANDLERS = (
     ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/notificationConfigs$".format(settings.API_ENDPOINT),
-        {GET: notifications.get, POST: notifications.insert},
+        {GET: notifications.ls, POST: notifications.insert},
     ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/notificationConfigs/(?P<object_id>.*[^/]+)$".format(settings.API_ENDPOINT),
-        {GET: notifications.getbyid, DELETE: notifications.delete},
+        {GET: notifications.get, DELETE: notifications.delete},
     ),
     # Non-default API endpoints
     (
