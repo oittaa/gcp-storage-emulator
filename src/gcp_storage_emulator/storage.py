@@ -445,25 +445,23 @@ class Storage(object):
         """
         return sha256(file_id.encode("utf-8")).hexdigest()
 
-    def get_notifications(self, bucket_name, topic_name):
+    def get_notifications(self, bucket_name):
         """Get the list of notification resource objects given the bucket name and topic name
 
         Arguments:
             bucket_name {str} -- Name of the bucket
-            topic_name {str} -- Name of the topic
 
         Returns:
             list -- list of GCS-like Notification resource
         """
 
-        return self.notifications.get(bucket_name, {}).get(topic_name, [])
+        return self.notifications.get(bucket_name, [])
 
-    def create_notification(self, bucket_name, topic_name, notification_obj):
+    def create_notification(self, bucket_name, notification_obj):
         """Create a notification object representation and save it to the current fs
 
         Arguments:
             bucket_name {str} -- Name of the GCS bucket
-            topic_name {str} -- Nome of the PubSub topic
             notification_obj {dict} -- GCS-like BucketNotification resource
 
         Returns:
@@ -471,12 +469,21 @@ class Storage(object):
         """
 
         if not self.notifications.get(bucket_name):
-            self.notifications[bucket_name] = {}
+            self.notifications[bucket_name] = []
 
-        if not self.notifications[bucket_name].get(topic_name):
-            self.notifications[bucket_name][topic_name] = []
-
-        self.notifications[bucket_name][topic_name].append(notification_obj)
+        self.notifications[bucket_name].append(notification_obj)
 
         self._write_config_to_file()
         return notification_obj
+
+    def delete_notification(self, bucket_name, notification):
+        """Delete a bucket's notification
+
+        Arguments:
+            bucket_name {str} -- GCS bucket name
+            bucket_name {str} -- notification id
+        """
+
+        self.notifications[bucket_name].remove(notification)
+
+        self._write_config_to_file()
