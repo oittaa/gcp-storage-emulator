@@ -28,7 +28,7 @@ EMPTY_NOTIFICATION_ID_ERROR = {
         "message": "Empty notification id",
         "errors": [
             {
-                "message": "notification id",
+                "message": "Empty notification id",
                 "domain": "global",
                 "reason": "invalid",
             }
