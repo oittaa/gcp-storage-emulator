@@ -145,11 +145,12 @@ def handle_event_types(event_types):
     return event_types
 
 
-def get_topic_configuration(topic):
+def get_topic_configuration(project_id, topic_name):
     publisher = pubsub.PublisherClient()
+    topic_path = publisher.topic_path(project_id, topic_name)
 
     try:
-        return publisher.get_topic(request={"topic": topic})
+        return publisher.get_topic(request={"topic": topic_path})
     except Exception:
         return None
 
@@ -232,7 +233,7 @@ def create_notification(bucket_name, topic, topic_name, payload_format, event_ty
 
     notification_id = str(int(last_notification_id) + 1)
     notification = _make_notification_resource(bucket_name, topic, topic_name, payload_format, event_types, notification_id)
-    storage.create_notification(bucket_name, topic_name, notification)
+    storage.create_notification(bucket_name, notification)
 
     return notification
 
@@ -258,9 +259,9 @@ def insert(request, response, storage, *args, **kwargs):
 
         return
 
-    topic_name_pattern = re.compile(TOPIC_REGEX)
-    topic_name_match = topic_name_pattern.fullmatch(topic)
-    if not topic_name_match:
+    topic_pattern = re.compile(TOPIC_REGEX)
+    topic_match = topic_pattern.fullmatch(topic)
+    if not topic_match:
         response.status = HTTPStatus.BAD_REQUEST
         response.json(INVALID_TOPIC_ERROR)
 
@@ -273,7 +274,9 @@ def insert(request, response, storage, *args, **kwargs):
 
         return
 
-    if not get_topic_configuration(topic):
+    project_id = topic_match.groupdict().get('project_id')
+    topic_name = topic_match.groupdict().get('topic_name')
+    if not get_topic_configuration(project_id, topic_name):
         response.status = HTTPStatus.NOT_FOUND
         response.json(TOPIC_NOT_FOUND_ERROR)
 
@@ -281,7 +284,6 @@ def insert(request, response, storage, *args, **kwargs):
 
     logger.debug("[BUCKETS] Received request to create notification in bucket {}".format(bucket_name))
 
-    topic_name = topic_name_match.groupdict().get('topic_name')
     event_types = handle_event_types(request.data.get('event_type'))
     notification = create_notification(bucket_name, topic, topic_name, payload_format, event_types, storage)
 

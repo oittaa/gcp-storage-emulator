@@ -15,7 +15,8 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "PYTHONPATH": "src"
+                "PYTHONPATH": "src",
+                "PUBSUB_EMULATOR_HOST": "0.0.0.0:8432",
             }
         }
     ]
