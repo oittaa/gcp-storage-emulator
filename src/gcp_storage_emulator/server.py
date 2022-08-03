@@ -40,7 +40,7 @@ def _health_check(req, res, storage):
 
 
 HANDLERS = (
-    (r"^{}/b$".format(settings.API_ENDPOINT), {GET: buckets.ls, POST: buckets.insert}),
+    (r"^{}/b$".format(settings.API_ENDPOINT), {GET: buckets.ls, POST: buckets.insert, OPTIONS: objects.options}),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)$".format(settings.API_ENDPOINT),
         {GET: buckets.get, DELETE: buckets.delete, OPTIONS: objects.options},
