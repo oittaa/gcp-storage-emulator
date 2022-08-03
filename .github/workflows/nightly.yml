@@ -19,7 +19,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-build-x-
       - name: Build
-        uses: docker/build-push-action@v3.0.0
+        uses: docker/build-push-action@v3.1.0
         with:
           push: false
           load: true
