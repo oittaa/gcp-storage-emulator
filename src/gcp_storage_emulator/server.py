@@ -40,7 +40,10 @@ def _health_check(req, res, storage):
 
 
 HANDLERS = (
-    (r"^{}/b$".format(settings.API_ENDPOINT), {GET: buckets.ls, POST: buckets.insert, OPTIONS: objects.options}),
+    (
+        r"^{}/b$".format(settings.API_ENDPOINT),
+        {GET: buckets.ls, POST: buckets.insert, OPTIONS: objects.options},
+    ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)$".format(settings.API_ENDPOINT),
         {GET: buckets.get, DELETE: buckets.delete, OPTIONS: objects.options},
@@ -66,7 +69,12 @@ HANDLERS = (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$".format(
             settings.API_ENDPOINT
         ),
-        {GET: objects.get, DELETE: objects.delete, PATCH: objects.patch, OPTIONS: objects.options},
+        {
+            GET: objects.get,
+            DELETE: objects.delete,
+            PATCH: objects.patch,
+            OPTIONS: objects.options,
+        },
     ),
     # Non-default API endpoints
     (

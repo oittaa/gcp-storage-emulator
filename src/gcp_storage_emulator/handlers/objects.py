@@ -544,4 +544,6 @@ def options(request, response, storage, *args, **kwargs):
     response.write("Content-Type: text/html; charset=UTF-8\r\n")
     response.write("allow: OPTIONS,GET,POST,PUT,DELETE,PATCH\r\n")
     response.write("Access-Control-Allow-Origin: *\r\n")
-    response.write("Access-Control-Allow-Methods: GET,POST,PUT,PATCH,DELETE,OPTIONS\r\n")
+    response.write(
+        "Access-Control-Allow-Methods: GET,POST,PUT,PATCH,DELETE,OPTIONS\r\n"
+    )
