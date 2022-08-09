@@ -83,5 +83,5 @@ class MainHttpEndpointsTest(ServerBaseCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(
             "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-            in response.headers["Access-Control-Allow-Methods"]
+            in response.headers["access-control-allow-methods"]
         )
