@@ -18,6 +18,21 @@
                 "PYTHONPATH": "src",
                 "PUBSUB_EMULATOR_HOST": "0.0.0.0:8432",
             }
+        },
+        {
+            "name": "Pytest",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "tests"
+            ],
+            "env": {
+                "PYTHONPATH": "src",
+                "PUBSUB_EMULATOR_HOST": "0.0.0.0:8432",
+            },
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

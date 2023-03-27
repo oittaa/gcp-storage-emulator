@@ -8,6 +8,7 @@ import fs
 from fs.errors import FileExpected, ResourceNotFound
 
 from gcp_storage_emulator.exceptions import Conflict, NotFound
+from gcp_storage_emulator.pubsub import send_upload_notification_to_pub_sub
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
 
 # Real buckets can't start with an underscore
@@ -193,6 +194,11 @@ class Storage(object):
             if file_id:
                 self.delete_resumable_file_obj(file_id)
                 self._delete_file(RESUMABLE_DIR, self.safe_id(file_id))
+            notifications = self.get_notifications(bucket_name)
+            for notification in notifications:
+                project_id = notification['topic'].split('projects/')[1].split('/')[0]
+                topic_name = notification['topic'].split('/')[-1]
+                send_upload_notification_to_pub_sub(project_id, topic_name, bucket_name, notification['id'], file_name)
             self._write_config_to_file()
 
     def create_resumable_upload(self, bucket_name, file_name, file_obj):

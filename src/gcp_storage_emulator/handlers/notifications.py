@@ -187,7 +187,7 @@ def ls(request, response, storage, *args, **kwargs):
 
     json_response = {"kind": "storage#notifications"}
 
-    bucket_notifications = storage.notifications.get(bucket_name)
+    bucket_notifications = storage.get_notifications(bucket_name)
     if bucket_notifications:
         json_response['items'] = bucket_notifications
 
