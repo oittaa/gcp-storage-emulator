@@ -183,3 +183,69 @@ class StorageOSFSTests(BaseTestCase):
     def test_without_absolute_path(self):
         with self.assertRaises(ValueError):
             _ = Storage(data_dir="test")
+
+    def test_insert_notification(self):
+        pass
+
+    def insert_notification_empty_bucket_name_error(self):
+        pass
+
+    def insert_notification_bucket_not_found_error(self):
+        pass
+
+    def insert_notification_resource_not_found_error(self):
+        pass
+
+    def insert_notification_payload_format_requirement_error(self):
+        pass
+
+    def insert_notification_missing_topic_error(self):
+        pass
+
+    def insert_notification_invalid_topic_error(self):
+        pass
+
+    def insert_notification_topic_not_found_error(self):
+        pass
+
+    def test_insert_notification_to_delete_after(self):
+        pass
+
+    def test_list_notifications(self):
+        pass
+
+    def test_list_notifications_empty_bucket_name_error(self):
+        pass
+
+    def test_list_notifications_bucket_not_found_error(self):
+        pass
+
+    def test_get_notification(self):
+        pass
+
+    def test_get_notification_empty_notification_id_error(self):
+        pass
+
+    def test_get_notification_empty_bucket_name_error(self):
+        pass
+
+    def test_get_notification_bucket_not_found_error(self):
+        pass
+
+    def test_delete_notification(self):
+        pass
+
+    def test_delete_notification_bucket_not_found_error(self):
+        pass
+
+    def test_delete_notification_resource_not_found_error(self):
+        pass
+
+    def test_delete_notification_empty_bucket_name_error(self):
+        pass
+
+    def test_delete_notification_empty_notification_id_error(self):
+        pass
+
+    def test_upload_file_and_pull_message_from_pubsub(self):
+        pass
