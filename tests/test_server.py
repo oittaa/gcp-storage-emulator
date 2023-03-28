@@ -994,16 +994,14 @@ class NotificationsBaseCase(BaseTestCase):
     def create_subscription(self, project_id: str, topic_name: str, subscription_name: str):
         topic_path = self._publisher.topic_path(project_id, topic_name)
         subscription_path = self._subscriber.subscription_path(project_id, subscription_name)
-        with self._subscriber:
-            subscription = self._subscriber.create_subscription(
-                request={"name": subscription_path, "topic": topic_path}
-            )
-            return subscription
+        subscription = self._subscriber.create_subscription(request={"name": subscription_path, "topic": topic_path})
+        return subscription
 
     def create_notification(self, project_id: str, bucket_name: str, topic_name: str):
         bucket = self._storage.bucket(bucket_name)
         notification = bucket.notification(topic_name=topic_name, topic_project=project_id)
         notification.create()
+        return notification
 
     def list_notifications(self, bucket_name: str):
         bucket = self._storage.bucket(bucket_name)
