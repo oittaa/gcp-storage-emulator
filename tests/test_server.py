@@ -968,3 +968,68 @@ class HttpEndpointsTest(ServerBaseCase):
         self.assertEqual(fetched_bucket.name, bucket.name)
         with self.assertRaises(NotFound):
             fetched_bucket.blob(blob_path).download_as_text()
+
+
+class NotificationsTests(ServerBaseCase):
+    def test_insert_notification(self):
+        bucket = self._client.create_bucket("bucket-name")
+
+        notification = bucket.notification(topic_name="topic-name", topic_project="[PROJECT]")
+        notification.create()
+
+        notifications = bucket.list_notifications()
+        print(notifications)
+
+        notification = bucket.get_notification("bucket-name")
+        print(notification)
+
+    # def insert_notification_empty_bucket_name_error(self):
+    #     pass
+
+    # def insert_notification_bucket_not_found_error(self):
+    #     pass
+
+    # def insert_notification_resource_not_found_error(self):
+    #     pass
+
+    # def insert_notification_payload_format_requirement_error(self):
+    #     pass
+
+    # def insert_notification_missing_topic_error(self):
+    #     pass
+
+    # def insert_notification_invalid_topic_error(self):
+    #     pass
+
+    # def insert_notification_topic_not_found_error(self):
+    #     pass
+
+    # def test_list_notifications_empty_bucket_name_error(self):
+    #     pass
+
+    # def test_list_notifications_bucket_not_found_error(self):
+    #     pass
+
+    # def test_get_notification_empty_notification_id_error(self):
+    #     pass
+
+    # def test_get_notification_empty_bucket_name_error(self):
+    #     pass
+
+    # def test_get_notification_bucket_not_found_error(self):
+    #     pass
+
+    # def test_upload_file_and_pull_message_from_pubsub(self):
+    #     pass
+
+    # def test_delete_notification_bucket_not_found_error(self):
+    #     pass
+
+    # def test_delete_notification_resource_not_found_error(self):
+    #     pass
+
+    # def test_delete_notification_empty_bucket_name_error(self):
+    #     pass
+
+    # def test_delete_notification_empty_notification_id_error(self):
+    #     pass
