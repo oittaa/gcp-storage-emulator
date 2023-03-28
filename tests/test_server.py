@@ -8,6 +8,9 @@ import fs
 import requests
 from google.api_core.exceptions import BadRequest, Conflict, NotFound
 from google.auth.credentials import AnonymousCredentials, Signing
+from google.cloud.pubsub import SubscriberClient
+from google.cloud.pubsub_v1 import PublisherClient
+from google.cloud.storage import Client as StorageClient
 
 from gcp_storage_emulator.server import create_server
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
@@ -970,66 +973,125 @@ class HttpEndpointsTest(ServerBaseCase):
             fetched_bucket.blob(blob_path).download_as_text()
 
 
-class NotificationsTests(ServerBaseCase):
-    def test_insert_notification(self):
-        bucket = self._client.create_bucket("bucket-name")
+class NotificationsBaseCase(BaseTestCase):
+    @classmethod
+    def setUpClass(self):
+        self._storage: StorageClient
+        self._publisher: PublisherClient
+        self._subscriber: SubscriberClient
 
-        notification = bucket.notification(topic_name="topic-name", topic_project="[PROJECT]")
+    def create_bucket(self, bucket_name: str):
+        bucket = self._storage.bucket(bucket_name)
+        bucket.storage_class = "COLDLINE"
+        new_bucket = self._storage.create_bucket(bucket, location="us")
+        return new_bucket
+
+    def create_topic(self, project_id: str, topic_name: str):
+        topic_path = self._publisher.topic_path(project_id, topic_name)
+        topic = self._publisher.create_topic(request={"name": topic_path})
+        return topic
+
+    def create_subscription(self, project_id: str, topic_name: str, subscription_name: str):
+        topic_path = self._publisher.topic_path(project_id, topic_name)
+        subscription_path = self._subscriber.subscription_path(project_id, subscription_name)
+        with self._subscriber:
+            subscription = self._subscriber.create_subscription(
+                request={"name": subscription_path, "topic": topic_path}
+            )
+            return subscription
+
+    def create_notification(self, project_id: str, bucket_name: str, topic_name: str):
+        bucket = self._storage.bucket(bucket_name)
+        notification = bucket.notification(topic_name=topic_name, topic_project=project_id)
         notification.create()
 
+    def list_notifications(self, bucket_name: str):
+        bucket = self._storage.bucket(bucket_name)
         notifications = bucket.list_notifications()
-        print(notifications)
+        return notifications
 
-        notification = bucket.get_notification("bucket-name")
-        print(notification)
+    def get_notification(self, bucket_name: str, notification_name: str):
+        bucket = self._storage.bucket(bucket_name)
+        notification = bucket.get_notification(notification_name)
+        return notification
 
-    # def insert_notification_empty_bucket_name_error(self):
-    #     pass
+    def delete_notification(self, bucket_name: str, notification_name: str):
+        bucket = self._storage.bucket(bucket_name)
+        notification = bucket.notification(notification_id=notification_name)
+        notification.delete()
 
-    # def insert_notification_bucket_not_found_error(self):
-    #     pass
+    def upload_file_into_bucket(self, bucket_name: str, destination: str, contents: str):
+        bucket = self._storage.bucket(bucket_name)
+        blob = bucket.blob(destination)
+        blob.upload_from_string(contents)
 
-    # def insert_notification_resource_not_found_error(self):
-    #     pass
+    def pull_messages_from_subscripton(self, project_id: str, subscription_name: str):
+        subscription_path = self._subscriber.subscription_path(project_id, subscription_name)
+        pull_response = self._subscriber.pull({"subscription": subscription_path, "max_messages": 1})
+        received_messages = [message for message in pull_response.received_messages]
+        return received_messages
 
-    # def insert_notification_payload_format_requirement_error(self):
-    #     pass
 
-    # def insert_notification_missing_topic_error(self):
-    #     pass
+class NotificationsTests(NotificationsBaseCase):
+    def test_insert_notification(self):
+        pass
 
-    # def insert_notification_invalid_topic_error(self):
-    #     pass
+    def insert_notification_empty_bucket_name_error(self):
+        pass
 
-    # def insert_notification_topic_not_found_error(self):
-    #     pass
+    def insert_notification_bucket_not_found_error(self):
+        pass
 
-    # def test_list_notifications_empty_bucket_name_error(self):
-    #     pass
+    def insert_notification_resource_not_found_error(self):
+        pass
 
-    # def test_list_notifications_bucket_not_found_error(self):
-    #     pass
+    def insert_notification_payload_format_requirement_error(self):
+        pass
 
-    # def test_get_notification_empty_notification_id_error(self):
-    #     pass
+    def insert_notification_missing_topic_error(self):
+        pass
 
-    # def test_get_notification_empty_bucket_name_error(self):
-    #     pass
+    def insert_notification_invalid_topic_error(self):
+        pass
 
-    # def test_get_notification_bucket_not_found_error(self):
-    #     pass
+    def insert_notification_topic_not_found_error(self):
+        pass
 
-    # def test_upload_file_and_pull_message_from_pubsub(self):
-    #     pass
+    def test_list_notifications(self):
+        pass
 
-    # def test_delete_notification_bucket_not_found_error(self):
-    #     pass
+    def test_list_notifications_empty_bucket_name_error(self):
+        pass
 
-    # def test_delete_notification_resource_not_found_error(self):
-    #     pass
+    def test_list_notifications_bucket_not_found_error(self):
+        pass
 
-    # def test_delete_notification_empty_bucket_name_error(self):
-    #     pass
+    def test_get_notification(self):
+        pass
 
-    # def test_delete_notification_empty_notification_id_error(self):
-    #     pass
+    def test_get_notification_empty_notification_id_error(self):
+        pass
+
+    def test_get_notification_empty_bucket_name_error(self):
+        pass
+
+    def test_get_notification_bucket_not_found_error(self):
+        pass
+
+    def test_delete_notification(self):
+        pass
+
+    def test_delete_notification_bucket_not_found_error(self):
+        pass
+
+    def test_delete_notification_resource_not_found_error(self):
+        pass
+
+    def test_delete_notification_empty_bucket_name_error(self):
+        pass
+
+    def test_delete_notification_empty_notification_id_error(self):
+        pass
+
+    def test_upload_file_and_pull_message_from_pubsub(self):
+        pass
