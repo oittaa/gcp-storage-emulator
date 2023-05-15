@@ -546,7 +546,6 @@ class ObjectsTests(ServerBaseCase):
         self._assert_blob_list(blobs, [])
 
     def test_list_blobs_on_entire_bucket(self):
-
         bucket_1 = self._client.create_bucket("bucket_name_1")
         bucket_2 = self._client.create_bucket("bucket_name_2")
 

@@ -293,7 +293,7 @@ class Response(object):
 
     def close(self):
         self._handler.send_response(self.status.value, self.status.phrase)
-        for (k, v) in self._headers.items():
+        for k, v in self._headers.items():
             self._handler.send_header(k, v)
 
         content = self._content
