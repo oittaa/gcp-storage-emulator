@@ -537,3 +537,13 @@ def batch(request, response, storage, *args, **kwargs):
             response.write("\r\n\r\n")
 
     response.write("--{}--".format(boundary))
+
+
+def options(request, response, storage, *args, **kwargs):
+    response.write("HTTP/1.1 200 OK\r\n")
+    response.write("Content-Type: text/html; charset=UTF-8\r\n")
+    response.write("allow: OPTIONS,GET,POST,PUT,DELETE,PATCH\r\n")
+    response.write("access-control-allow-origin: *\r\n")
+    response.write(
+        "access-control-allow-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS\r\n"
+    )
