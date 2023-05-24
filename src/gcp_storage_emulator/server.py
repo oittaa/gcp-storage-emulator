@@ -407,6 +407,14 @@ class Server(object):
             buckets.create_bucket(default_bucket, self._storage)
         self._api = APIThread(host, port, self._storage)
 
+    # Context Manager
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, *args):
+        self.stop()
+
     def start(self):
         self._api.start()
         self._api.is_running.wait()  # Start the API thread
