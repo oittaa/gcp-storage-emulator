@@ -399,6 +399,45 @@ def copy(request, response, storage, *args, **kwargs):
         _handle_conflict(response, err)
 
 
+def rewrite(request, response, storage, *args, **kwargs):
+    try:
+        obj = storage.get_file_obj(
+            request.params["bucket_name"], request.params["object_id"]
+        )
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
+        return
+
+    dest_obj = _make_object_resource(
+        request.base_url,
+        request.params["dest_bucket_name"],
+        request.params["dest_object_id"],
+        obj["contentType"],
+        obj["size"],
+        obj,
+    )
+
+    file = storage.get_file(request.params["bucket_name"], request.params["object_id"])
+    try:
+        dest_obj = _checksums(file, dest_obj)
+        storage.create_file(
+            request.params["dest_bucket_name"],
+            request.params["dest_object_id"],
+            file,
+            dest_obj,
+        )
+        response.json({
+            "resource": dest_obj,
+            "written": dest_obj["size"],
+            "size": dest_obj["size"],
+            "done": True,
+        })
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
+    except Conflict as err:
+        _handle_conflict(response, err)
+
+
 def compose(request, response, storage, *args, **kwargs):
     content_type = None
     dest_file = b""

@@ -56,6 +56,13 @@ HANDLERS = (
         {POST: objects.copy},
     ),
     (
+        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/rewriteTo/b/".format(
+            settings.API_ENDPOINT
+        )
+        + r"(?P<dest_bucket_name>[-.\w]+)/o/(?P<dest_object_id>.*[^/]+)$",
+        {POST: objects.rewrite},
+    ),
+    (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/compose$".format(
             settings.API_ENDPOINT
         ),
