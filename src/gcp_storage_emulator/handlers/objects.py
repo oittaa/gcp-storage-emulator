@@ -471,6 +471,9 @@ def download(request, response, storage, *args, **kwargs):
             hash_header = "crc32c={},md5={}".format(obj["crc32c"], obj["md5Hash"])
             response[_HASH_HEADER] = hash_header
 
+        if 'response-content-disposition' in request.query:
+            response['Content-Disposition'] = request.query['response-content-disposition'][0]
+
         response.write_file(file, content_type=obj.get("contentType"))
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
