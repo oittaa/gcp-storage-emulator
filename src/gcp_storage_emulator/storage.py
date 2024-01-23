@@ -2,6 +2,8 @@ import datetime
 import json
 import logging
 import os
+import fnmatch
+
 from hashlib import sha256
 
 import fs
@@ -92,7 +94,7 @@ class Storage(object):
 
         return self.buckets.get(bucket_name)
 
-    def get_file_list(self, bucket_name, prefix=None, delimiter=None):
+    def get_file_list(self, bucket_name, prefix=None, delimiter=None, matchGlob=None):
         """Lists all the blobs in the bucket that begin with the prefix.
 
         This can be used to list all blobs in a "folder", e.g. "public/".
@@ -135,7 +137,22 @@ class Storage(object):
                 and (not delimiter or delimiter not in file_name[prefix_len:])
             )
         else:
-            objs = list(bucket_objects.values())
+    
+            # Requests that use the matchGlob parameter fail if they also include a delimiter parameter set to a value other than /.
+            if matchGlob and delimiter and delimiter != "/":
+                raise ValueError('Wrong delimiter used with matchGlob')
+
+            if matchGlob:
+                objs = list(
+                    file_object
+                    for file_name, file_object in bucket_objects.items()
+                    if fnmatch.fnmatch(file_name, matchGlob)
+                )
+            else:
+                objs = list(bucket_objects.values())
+
+        
+
         if delimiter:
             prefixes = list(
                 file_name[:prefix_len]
@@ -145,7 +162,9 @@ class Storage(object):
                 if file_name.startswith(prefix or "")
                 and delimiter in file_name[prefix_len:]
             )
+
         return objs, prefixes
+    
 
     def create_bucket(self, bucket_name, bucket_obj):
         """Create a bucket object representation and save it to the current fs

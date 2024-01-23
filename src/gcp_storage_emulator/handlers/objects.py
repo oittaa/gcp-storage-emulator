@@ -354,11 +354,12 @@ def get(request, response, storage, *args, **kwargs):
 def ls(request, response, storage, *args, **kwargs):
     bucket_name = request.params["bucket_name"]
     prefix = request.query.get("prefix")[0] if request.query.get("prefix") else None
+    matchGlob = request.query.get("matchGlob")[0] if request.query.get("matchGlob") else None
     delimiter = (
         request.query.get("delimiter")[0] if request.query.get("delimiter") else None
     )
     try:
-        files, prefixes = storage.get_file_list(bucket_name, prefix, delimiter)
+        files, prefixes = storage.get_file_list(bucket_name, prefix, delimiter, matchGlob)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
     else:
