@@ -120,6 +120,60 @@ class StorageOSFSTests(BaseTestCase):
         )
         self.assertNotEqual(file_id_1, file_id_2)
 
+
+    def test_get_file_ids_by_matchglob(self):
+        # File names with distinct patterns
+        blob_names = ["foo/bar", "foo/baz", "foo/foobar", "foobar"]
+        content = "Helloworld".encode("utf8")
+        for name in blob_names:
+            file_obj = {"bucket": "a_bucket_name", "name": name}
+            self.storage.create_file("a_bucket_name", name, content, file_obj)
+
+        match_glob_results = {
+            "foo*bar": ["foobar"],
+            "foo**bar": ["foo/bar", "foo/foobar", "foobar"],
+            "**/foobar": ["foo/foobar", "foobar"],
+            "*/ba[rz]": ["foo/bar", "foo/baz"],
+            "*/ba[!a-y]": ["foo/baz"],
+            "**/{foobar,baz}": ["foo/baz", "foo/foobar", "foobar"],
+            "foo/{foo*,*baz}": ["foo/baz", "foo/foobar"],
+        }
+
+        # Iterate through the match glob patterns and expected results
+        for match_glob, expected_names in match_glob_results.items():
+            file_objs,prefixes = self.storage.get_file_list("a_bucket_name", match_glob=match_glob)
+            filtered_names = [obj['name'] for obj in file_objs if obj]
+            self.assertEqual(filtered_names, expected_names)
+
+
+    def test_get_file_ids_by_slash_delimiter_and_matchglob(self):
+        # File names with distinct patterns
+        blob_names = ["all/foo/bar", "foo/baz", "foo/389_bar", "bar", "baz"]
+        content = "Helloworld".encode("utf8")
+        for name in blob_names:
+            file_obj = {"bucket": "a_bucket_name", "name": name}
+            self.storage.create_file("a_bucket_name", name, content, file_obj)
+
+        match_glob_results = {
+            "foo*bar": [],
+            "foo**bar": [],
+            "**/bar": ["bar"],
+            "*/bar": [],
+            "*/ba[rz]": [],
+            "**ba[rz]": ["bar","baz"],
+            "*/ba[!a-y]": [],
+            "*ba[!a-y]": ["baz"],
+            "**/{foobar,baz}": ["baz"],
+            "foo/{foo*,*baz}": [],
+            "*{foo*,*baz}": ["baz"],
+        }
+
+        # Iterate through the match glob patterns and expected results
+        for match_glob, expected_names in match_glob_results.items():
+            file_objs,prefixes = self.storage.get_file_list("a_bucket_name", match_glob=match_glob, delimiter="/")
+            filtered_names = [obj['name'] for obj in file_objs if obj]
+            self.assertEqual(filtered_names, expected_names)
+
     def test_create_file_for_resumable_upload(self):
         test_file = os.path.join(
             os.getcwd(), STORAGE_BASE, STORAGE_DIR, "a_bucket_name", "file_name.png"

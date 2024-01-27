@@ -597,6 +597,61 @@ class ObjectsTests(ServerBaseCase):
         self._assert_blob_list(blobs, [blob_1, blob_2])
         self.assertEqual(blobs.prefixes, {"a/b/"})
 
+
+    def test_bucket_list_blobs_w_match_glob(self):
+        bucket = self._client.create_bucket("bucket_name")
+
+        # File names with distinct patterns
+        blob_names = ["foo/bar", "foo/baz", "foo/foobar", "foobar"]
+        for name in blob_names:
+            blob = bucket.blob(name)
+            blob.upload_from_string("helloworld")
+
+        match_glob_results = {
+            "foo*bar": ["foobar"],
+            "foo**bar": ["foo/bar", "foo/foobar", "foobar"],
+            "**/foobar": ["foo/foobar", "foobar"],
+            "*/ba[rz]": ["foo/bar", "foo/baz"],
+            "*/ba[!a-y]": ["foo/baz"],
+            "**/{foobar,baz}": ["foo/baz", "foo/foobar", "foobar"],
+            "foo/{foo*,*baz}": ["foo/baz", "foo/foobar"],
+        }
+
+        # Iterate through the match glob patterns and expected results
+        for match_glob, expected_names in match_glob_results.items():
+            file_objs = self._client.list_blobs(bucket, match_glob=match_glob)
+            filtered_names = [obj.name for obj in file_objs if obj]
+            self.assertEqual(filtered_names, expected_names)
+
+    def test_bucket_list_blobs_w_match_glob_and_delimiter(self):
+        bucket = self._client.create_bucket("bucket_name")
+
+        # File names with distinct patterns
+        blob_names = ["all/foo/bar", "foo/baz", "foo/389_bar", "bar", "baz"]
+        for name in blob_names:
+            blob = bucket.blob(name)
+            blob.upload_from_string("helloworld")
+
+        match_glob_results = {
+            "foo*bar": [],
+            "foo**bar": [],
+            "**/bar": ["bar"],
+            "*/bar": [],
+            "*/ba[rz]": [],
+            "**ba[rz]": ["bar","baz"],
+            "*/ba[!a-y]": [],
+            "*ba[!a-y]": ["baz"],
+            "**/{foobar,baz}": ["baz"],
+            "foo/{foo*,*baz}": [],
+            "*{foo*,*baz}": ["baz"],
+        }
+
+        # Iterate through the match glob patterns and expected results
+        for match_glob, expected_names in match_glob_results.items():
+            file_objs = self._client.list_blobs(bucket, match_glob=match_glob, delimiter="/")
+            filtered_names = [obj.name for obj in file_objs if obj]
+            self.assertEqual(filtered_names, expected_names)
+
     def test_bucket_copy_existing(self):
         bucket = self._client.create_bucket("bucket_name")
 

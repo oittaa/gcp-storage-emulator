@@ -2,10 +2,9 @@ import datetime
 import json
 import logging
 import os
-import fnmatch
-
 from hashlib import sha256
-
+from wcmatch import glob
+import re
 import fs
 from fs.errors import FileExpected, ResourceNotFound
 
@@ -94,7 +93,7 @@ class Storage(object):
 
         return self.buckets.get(bucket_name)
 
-    def get_file_list(self, bucket_name, prefix=None, delimiter=None, matchGlob=None):
+    def get_file_list(self, bucket_name, prefix=None, delimiter=None, match_glob=None):
         """Lists all the blobs in the bucket that begin with the prefix.
 
         This can be used to list all blobs in a "folder", e.g. "public/".
@@ -125,43 +124,49 @@ class Storage(object):
         if bucket_name not in self.buckets:
             raise NotFound
 
-        prefix_len = 0
-        prefixes = []
         bucket_objects = self.objects.get(bucket_name, {})
-        if prefix:
-            prefix_len = len(prefix)
-            objs = list(
-                file_object
-                for file_name, file_object in bucket_objects.items()
-                if file_name.startswith(prefix)
-                and (not delimiter or delimiter not in file_name[prefix_len:])
-            )
-        else:
-    
+        objs = []
+        prefixes = set()
+
+
+
+        # If matchGlob is provided, filter objects using the glob pattern
+        if match_glob:
             # Requests that use the matchGlob parameter fail if they also include a delimiter parameter set to a value other than /.
-            if matchGlob and delimiter and delimiter != "/":
-                raise ValueError('Wrong delimiter used with matchGlob')
-
-            if matchGlob:
-                objs = list(
-                    file_object
-                    for file_name, file_object in bucket_objects.items()
-                    if fnmatch.fnmatch(file_name, matchGlob)
-                )
+            if delimiter:
+                if delimiter != "/":
+                    raise BadRequest("When listing with a glob pattern, the only supported delimiter is '/'.",)
+                else:
+                    objs = [
+                        file_object for file_name, file_object in bucket_objects.items()
+                        if '/' not in file_name
+                        if not re.search(r'/[^*]\*\//gm', match_glob)
+                        if glob.globmatch(file_name.split("/")[-1], match_glob.replace('**/', '*',).replace('**', '*'), flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB)
+                    ]            
+            
             else:
-                objs = list(bucket_objects.values())
+                objs = [
+                    file_object for file_name, file_object in bucket_objects.items()
+                    if glob.globmatch(file_name, match_glob,                      flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB) 
+                    or glob.globmatch(file_name, match_glob.replace('**', '*/*'), flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB)
+                ]
 
-        
+        # If matchGlob is not provided, apply the prefix and delimiter filtering
+        else:
+            for file_name, file_object in bucket_objects.items():
+                if prefix is None or file_name.startswith(prefix):
+                    prefix_len = len(prefix) if prefix else 0
+                    if delimiter:
+                        if delimiter in file_name[prefix_len:]:
+                            prefix_end_index = file_name.find(delimiter, prefix_len) + len(delimiter)
+                            prefixes.add(file_name[:prefix_end_index])
+                        else:
+                            objs.append(file_object)
+                    else:
+                        objs.append(file_object)
 
-        if delimiter:
-            prefixes = list(
-                file_name[:prefix_len]
-                + file_name[prefix_len:].split(delimiter, 1)[0]
-                + delimiter
-                for file_name in list(bucket_objects)
-                if file_name.startswith(prefix or "")
-                and delimiter in file_name[prefix_len:]
-            )
+        # Convert prefixes set to a sorted list
+        prefixes = sorted(list(prefixes))
 
         return objs, prefixes
     
