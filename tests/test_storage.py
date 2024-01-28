@@ -2,7 +2,7 @@ import json
 import os
 from unittest import TestCase as BaseTestCase
 
-from gcp_storage_emulator.exceptions import NotFound
+from gcp_storage_emulator.exceptions import NotFound, BadRequest
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
 from gcp_storage_emulator.storage import Storage
 
@@ -145,6 +145,14 @@ class StorageOSFSTests(BaseTestCase):
             filtered_names = [obj['name'] for obj in file_objs if obj]
             self.assertEqual(filtered_names, expected_names)
 
+
+    def test_get_file_ids_by_wrong_delimiter_and_matchglob(self):
+        content = "Helloworld".encode("utf8")
+        self.storage.create_file("a_bucket_name", 'file.png', content, {"bucket": "a_bucket_name", "name": "file.png"})
+
+        # Iterate through the match glob patterns and expected results
+        with self.assertRaises(BadRequest):
+            self.storage.get_file_list("a_bucket_name", delimiter="*", match_glob="*.png")
 
     def test_get_file_ids_by_slash_delimiter_and_matchglob(self):
         # File names with distinct patterns

@@ -3,7 +3,7 @@ import os
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 from unittest import TestCase as BaseTestCase
-
+import sys
 import fs
 import requests
 from google.api_core.exceptions import BadRequest, Conflict, NotFound
@@ -651,6 +651,16 @@ class ObjectsTests(ServerBaseCase):
             file_objs = self._client.list_blobs(bucket, match_glob=match_glob, delimiter="/")
             filtered_names = [obj.name for obj in file_objs if obj]
             self.assertEqual(filtered_names, expected_names)
+
+
+    def test_wrong_delimiter_with_matchGlob(self):
+        bucket = self._client.create_bucket("bucket_name")
+        
+        try:
+            self._client.list_blobs(bucket, delimiter="*", match_glob="*.pdf")
+        except Exception as ex:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            self.assertEqual(BadRequest, exc_type)
 
     def test_bucket_copy_existing(self):
         bucket = self._client.create_bucket("bucket_name")

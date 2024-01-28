@@ -8,7 +8,7 @@ import re
 import fs
 from fs.errors import FileExpected, ResourceNotFound
 
-from gcp_storage_emulator.exceptions import Conflict, NotFound
+from gcp_storage_emulator.exceptions import Conflict, NotFound, BadRequest
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
 
 # Real buckets can't start with an underscore

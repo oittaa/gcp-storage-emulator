@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 
 from gcp_storage_emulator import settings
-from gcp_storage_emulator.exceptions import Conflict, NotFound
+from gcp_storage_emulator.exceptions import Conflict, NotFound, BadRequest
 
 logger = logging.getLogger("api.bucket")
 
@@ -110,5 +110,7 @@ def delete(request, response, storage, *args, **kwargs):
         storage.delete_bucket(name)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
+    except BadRequest:
+        response.status = HTTPStatus.BAD_REQUEST
     except Conflict:
         response.status = HTTPStatus.CONFLICT

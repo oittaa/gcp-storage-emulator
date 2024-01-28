@@ -15,7 +15,7 @@ from http import HTTPStatus
 
 import google_crc32c
 
-from gcp_storage_emulator.exceptions import Conflict, NotFound
+from gcp_storage_emulator.exceptions import Conflict, NotFound, BadRequest
 
 logger = logging.getLogger("api.object")
 
@@ -362,6 +362,8 @@ def ls(request, response, storage, *args, **kwargs):
         files, prefixes = storage.get_file_list(bucket_name, prefix, delimiter, matchGlob)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
+    except BadRequest:
+        response.status = HTTPStatus.BAD_REQUEST
     else:
         response.json({"kind": "storage#object", "prefixes": prefixes, "items": files})
 
