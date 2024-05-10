@@ -366,36 +366,49 @@ def ls(request, response, storage, *args, **kwargs):
 
 def copy(request, response, storage, *args, **kwargs):
     try:
-        obj = storage.get_file_obj(
-            request.params["bucket_name"], request.params["object_id"]
+        dest_obj = _copy(
+            request.base_url,
+            storage,
+            request.params["bucket_name"],
+            request.params["object_id"],
+            request.params["dest_bucket_name"],
+            request.params["dest_object_id"],
         )
+        if dest_obj is None:
+            response.status = HTTPStatus.NOT_FOUND
+        else:
+            response.json(dest_obj)
+    except Conflict as err:
+        _handle_conflict(response, err)
+
+
+def _copy(base_url, storage, bucket_name, object_id, dest_bucket_name, dest_object_id):
+    try:
+        obj = storage.get_file_obj(bucket_name, object_id)
     except NotFound:
-        response.status = HTTPStatus.NOT_FOUND
-        return
+        return None
 
     dest_obj = _make_object_resource(
-        request.base_url,
-        request.params["dest_bucket_name"],
-        request.params["dest_object_id"],
+        base_url,
+        dest_bucket_name,
+        dest_object_id,
         obj["contentType"],
         obj["size"],
         obj,
     )
 
-    file = storage.get_file(request.params["bucket_name"], request.params["object_id"])
+    file = storage.get_file(bucket_name, object_id)
     try:
         dest_obj = _checksums(file, dest_obj)
         storage.create_file(
-            request.params["dest_bucket_name"],
-            request.params["dest_object_id"],
+            dest_bucket_name,
+            dest_object_id,
             file,
             dest_obj,
         )
-        response.json(dest_obj)
+        return dest_obj
     except NotFound:
-        response.status = HTTPStatus.NOT_FOUND
-    except Conflict as err:
-        _handle_conflict(response, err)
+        return None
 
 
 def rewrite(request, response, storage, *args, **kwargs):
@@ -571,6 +584,22 @@ def batch(request, response, storage, *args, **kwargs):
             if resp_data:
                 response.write("HTTP/1.1 204 No Content\r\n")
                 response.write("Content-Type: application/json; charset=UTF-8\r\n")
+        if method == "POST":  # kludgy heuristics, currently only supports COPY
+            if object_id:
+                resp_data = _copy(
+                    request.base_url,
+                    storage,
+                    bucket_name,
+                    object_id,
+                    item["dest_bucket_name"],
+                    item["dest_object_id"],
+                )
+            if resp_data:
+                response.write("HTTP/1.1 200 OK\r\n")
+                response.write("Content-Type: application/json; charset=UTF-8\r\n")
+                response.write(json.dumps(resp_data))
+                response.write("\r\n\r\n")
+
         if not resp_data:
             msg = "No such object: {}/{}".format(bucket_name, object_id)
             resp_data = deepcopy(NOT_FOUND)
