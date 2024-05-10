@@ -106,6 +106,8 @@ BATCH_HANDLERS = (
     r"^(?P<method>[\w]+).*{}/b/(?P<bucket_name>[-.\w]+)([\?].*)?$".format(
         settings.API_ENDPOINT
     ),
+    r"^(?P<method>[\w]+).*{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>[^\?]+[^/])/copyTo/b/(?P<dest_bucket_name>[-.\w]+)/o/"
+    r"(?P<dest_object_id>[^\?]+[^/])([\?].*)?$".format(settings.API_ENDPOINT),
     r"^Content-Type:\s*(?P<content_type>[-.\w/]+)$",
 )
 

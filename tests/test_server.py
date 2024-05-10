@@ -758,6 +758,23 @@ class ObjectsTests(ServerBaseCase):
         with self.assertRaises(NotFound):
             self._client.get_bucket("batchbucket2")
 
+    def test_batch_copy_existing(self):
+        bucket = self._client.create_bucket("bucket_name")
+
+        source = []
+        target = []
+        for i in range(2):
+            source.append(bucket.blob("a/{}.txt".format(i)))
+            source[-1].upload_from_string("text {}".format(i))
+            target.append(bucket.blob("b/{}.txt".format(i)))
+
+        with self._client.batch():
+            for i in range(2):
+                bucket.copy_blob(source[i], bucket, target[i].name)
+
+        blobs = self._client.list_blobs(bucket)
+        self._assert_blob_list(blobs, source + target)
+
     def test_resumable_upload_small_chunk_size(self):
         content = b"a" * 10000000
         bucket = self._client.create_bucket("testbucket")
