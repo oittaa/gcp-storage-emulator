@@ -817,7 +817,7 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.blob("signed-download")
         blob.upload_from_string(content, content_type="text/mycustom")
 
-        requested_filename = 'requested_filename.cst2'
+        requested_filename = "requested_filename.cst2"
         response_disposition = f'attachment; filename="{requested_filename}"'
 
         url = blob.generate_signed_url(
@@ -832,17 +832,20 @@ class ObjectsTests(ServerBaseCase):
         response = requests.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, content)
-        self.assertEqual(response.headers['content-disposition'], f"{response_disposition}")
+        self.assertEqual(
+            response.headers["content-disposition"], f"{response_disposition}"
+        )
         self.assertEqual(response.headers["content-type"], "text/mycustom")
 
     def test_url_generation_for_browser(self):
-        self.skipTest('Used to test browser functionality with URL, not API.')
+        self.skipTest("Used to test browser functionality with URL, not API.")
         os.environ["STORAGE_EMULATOR_HOST"] = "http://localhost:8080"
         content = b"The quick brown fox jumps over the lazy dog"
 
         # Cloud Storage uses environment variables to configure API endpoints for
         # file upload - which is read at module import time
         from google.cloud import storage
+
         http = requests.Session()
 
         client = storage.Client(
@@ -856,7 +859,7 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.blob("signed-download")
         blob.upload_from_string(content, content_type="text/html")
 
-        requested_filename = 'requested_filename.cst2'
+        requested_filename = "requested_filename.cst2"
         response_disposition = f'attachment; filename="{requested_filename}"'
 
         url = blob.generate_signed_url(
