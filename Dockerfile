@@ -1,4 +1,4 @@
-FROM python:3.10.6-slim
+FROM python:3.12.4-slim
 
 
 RUN apt-get update -qq && apt-get install -y curl && rm -rf /var/lib/apt/lists/*

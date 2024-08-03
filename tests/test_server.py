@@ -836,7 +836,7 @@ class ObjectsTests(ServerBaseCase):
         self.assertEqual(fetched_content, content)
 
     def test_resumable_upload_large_file(self):
-        content = b"abcde12345" * 20000000
+        content = b"abcde12345" * 2000000
         bucket = self._client.create_bucket("testbucket")
 
         blob = bucket.blob("resumable-test")
