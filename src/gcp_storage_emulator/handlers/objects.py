@@ -1,7 +1,6 @@
 import hashlib
 import json
 import logging
-import math
 import re
 import secrets
 import string
@@ -124,7 +123,7 @@ def _patch_object(obj, metadata):
 def _make_object_resource(
     base_url, bucket_name, object_name, content_type, content_length, metadata=None
 ):
-    time_id = math.floor(time.time())
+    time_id = time.time_ns()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
     obj = {
