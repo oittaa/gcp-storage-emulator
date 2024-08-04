@@ -5,6 +5,9 @@ requires = [
 ]
 
 [tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
 addopts = "--cov=src --cov-report=xml --cov-branch"
 testpaths = [
     "tests"

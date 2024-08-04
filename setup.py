@@ -60,6 +60,7 @@ setup(
     install_requires=[
         "fs",
         "google-crc32c",
+        "wcmatch"
     ],
     python_requires=">=3.8",
 )
