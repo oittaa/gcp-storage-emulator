@@ -21,6 +21,7 @@ POST = "POST"
 PUT = "PUT"
 DELETE = "DELETE"
 PATCH = "PATCH"
+OPTIONS = "OPTIONS"
 
 
 def _wipe_data(req, res, storage):
@@ -39,21 +40,24 @@ def _health_check(req, res, storage):
 
 
 HANDLERS = (
-    (r"^{}/b$".format(settings.API_ENDPOINT), {GET: buckets.ls, POST: buckets.insert}),
+    (
+        r"^{}/b$".format(settings.API_ENDPOINT),
+        {GET: buckets.ls, POST: buckets.insert, OPTIONS: objects.options},
+    ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)$".format(settings.API_ENDPOINT),
-        {GET: buckets.get, DELETE: buckets.delete},
+        {GET: buckets.get, DELETE: buckets.delete, OPTIONS: objects.options},
     ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o$".format(settings.API_ENDPOINT),
-        {GET: objects.ls},
+        {GET: objects.ls, OPTIONS: objects.options},
     ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/copyTo/b/".format(
             settings.API_ENDPOINT
         )
         + r"(?P<dest_bucket_name>[-.\w]+)/o/(?P<dest_object_id>.*[^/]+)$",
-        {POST: objects.copy},
+        {POST: objects.copy, OPTIONS: objects.options},
     ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/rewriteTo/b/".format(
@@ -66,36 +70,41 @@ HANDLERS = (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/compose$".format(
             settings.API_ENDPOINT
         ),
-        {POST: objects.compose},
+        {POST: objects.compose, OPTIONS: objects.options},
     ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$".format(
             settings.API_ENDPOINT
         ),
-        {GET: objects.get, DELETE: objects.delete, PATCH: objects.patch},
+        {
+            GET: objects.get,
+            DELETE: objects.delete,
+            PATCH: objects.patch,
+            OPTIONS: objects.options,
+        },
     ),
     # Non-default API endpoints
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o$".format(settings.UPLOAD_API_ENDPOINT),
-        {POST: objects.insert, PUT: objects.upload_partial},
+        {POST: objects.insert, PUT: objects.upload_partial, OPTIONS: objects.options},
     ),
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$".format(
             settings.DOWNLOAD_API_ENDPOINT
         ),
-        {GET: objects.download},
+        {GET: objects.download, OPTIONS: objects.options},
     ),
     (
         r"^{}$".format(settings.BATCH_API_ENDPOINT),
-        {POST: objects.batch},
+        {POST: objects.batch, OPTIONS: objects.options},
     ),
     # Internal API, not supported by the real GCS
-    (r"^/$", {GET: _health_check}),  # Health check endpoint
-    (r"^/wipe$", {GET: _wipe_data}),  # Wipe all data
+    (r"^/$", {GET: _health_check, OPTIONS: objects.options}),  # Health check endpoint
+    (r"^/wipe$", {GET: _wipe_data, OPTIONS: objects.options}),  # Wipe all data
     # Public file serving, same as object.download and signed URLs
     (
         r"^/(?P<bucket_name>[-.\w]+)/(?P<object_id>.*[^/]+)$",
-        {GET: objects.download, PUT: objects.xml_upload},
+        {GET: objects.download, PUT: objects.xml_upload, OPTIONS: objects.options},
     ),
 )
 
@@ -376,6 +385,10 @@ class RequestHandler(server.BaseHTTPRequestHandler):
     def do_PATCH(self):
         router = Router(self)
         router.handle(PATCH)
+
+    def do_OPTIONS(self):
+        router = Router(self)
+        router.handle(OPTIONS)
 
     def log_message(self, format, *args):
         logger.info(format % args)
