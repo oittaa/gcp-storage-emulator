@@ -4,3 +4,7 @@ class NotFound(Exception):
 
 class Conflict(Exception):
     pass
+
+
+class BadRequest(Exception):
+    pass
