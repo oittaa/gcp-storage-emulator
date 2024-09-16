@@ -1,11 +1,37 @@
+[project]
+name = "gcp-storage-emulator"
+version = "0.1.0"
+description = "A stub emulator for the Google Cloud Storage API"
+authors = [
+    { name = "Travis Peterson", email = "contact@travispeterson.us" }
+]
+dependencies = [
+    "fs",
+    "google-crc32c",
+]
+readme = "README.md"
+requires-python = ">= 3.12"
+
 [build-system]
-requires = [
-    "setuptools",
-    "wheel"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "flake8",
+    "google-cloud-storage",
+    "google-crc32c",
+    "pytest",
+    "pytest-cov",
+    "requests",
 ]
 
-[tool.pytest.ini_options]
-addopts = "--cov=src --cov-report=xml --cov-branch"
-testpaths = [
-    "tests"
-]
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gcp_storage_emulator"]
+
+[project.scripts]
+gcp-storage-emulator = "gcp_storage_emulator:main"
