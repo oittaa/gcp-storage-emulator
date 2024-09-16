@@ -1,0 +1,31 @@
+name: Build and Deploy Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  setup-build-deploy:
+    name: Setup, Build, and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Gcloud Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}"
+
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v2"
+        with:
+          version: ">= 363.0.0"
+          project_id: gain-data
+
+      - name: Build
+        run: |
+          export GIT_COMMIT_SHORT="$(git rev-parse --short ${{ github.sha }})"
+          gcloud --project gain-data builds submit --config build.yml --substitutions=_COMMIT_SHA=${GIT_COMMIT_SHORT} .

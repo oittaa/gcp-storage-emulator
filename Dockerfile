@@ -10,9 +10,11 @@ ENV STORAGE_DIR storage
 
 # Python app installation
 WORKDIR $APP_HOME
-COPY README.md pyproject.toml setup.py ./
+COPY README.md pyproject.toml ./
 COPY src src/
-RUN pip install .
+
+RUN PYTHONDONTWRITEBYTECODE=1 pip install --no-cache-dir -t /deps -r requirements.lock
+ENV PYTHONPATH="/deps"
 
 ENTRYPOINT ["gcp-storage-emulator"]
 CMD ["start"]
