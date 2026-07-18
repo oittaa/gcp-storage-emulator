@@ -1,10 +1,11 @@
 import datetime
+import json
 import os
 from io import BytesIO
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 from unittest import TestCase as BaseTestCase
 
-import fs
 import requests
 from google.api_core.exceptions import BadRequest, Conflict, NotFound
 from google.auth.credentials import AnonymousCredentials, Signing
@@ -12,8 +13,11 @@ from google.auth.credentials import AnonymousCredentials, Signing
 from gcp_storage_emulator.server import create_server
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
 
-
 TEST_TEXT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_text.txt")
+
+
+def _storage_path(*parts: str) -> Path:
+    return Path(STORAGE_BASE, STORAGE_DIR, *parts)
 
 
 class FakeSigningCredentials(Signing, AnonymousCredentials):
@@ -120,8 +124,7 @@ class BucketsTests(BaseTestCase):
         bucket = self._client.create_bucket("bucket_name")
         bucket.delete()
 
-        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
-            self.assertFalse(pwd.exists("bucket_name"))
+        self.assertFalse(_storage_path("bucket_name").exists())
 
     def test_bucket_delete_non_existing(self):
         # client.bucket doesn't create the actual bucket resource remotely
@@ -150,8 +153,7 @@ class BucketsTests(BaseTestCase):
         blob = bucket.get_blob("cantouchme.txt")
         self.assertIsNone(blob)
 
-        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
-            self.assertFalse(pwd.exists("bucket_name"))
+        self.assertFalse(_storage_path("bucket_name").exists())
 
 
 class DefaultBucketTests(BaseTestCase):
@@ -180,9 +182,10 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.blob("testblob-name.txt")
         blob.upload_from_string(content)
 
-        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
-            read_content = pwd.readtext("testbucket/testblob-name.txt")
-            self.assertEqual(read_content, content)
+        read_content = _storage_path("testbucket", "testblob-name.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(read_content, content)
 
     def test_upload_from_text_file(self):
         bucket = self._client.create_bucket("testbucket")
@@ -190,8 +193,9 @@ class ObjectsTests(ServerBaseCase):
         with open(TEST_TEXT, "rb") as file:
             blob.upload_from_file(file)
 
-            with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
-                read_content = pwd.readtext("testbucket/test_text.txt")
+        read_content = _storage_path("testbucket", "test_text.txt").read_text(
+            encoding="utf-8"
+        )
 
         with open(TEST_TEXT, "rb") as file:
             expected_content = str(file.read(), encoding="utf-8")
@@ -206,8 +210,7 @@ class ObjectsTests(ServerBaseCase):
         with open(test_binary, "rb") as file:
             blob.upload_from_file(file)
 
-        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
-            read_content = pwd.readbytes("testbucket/binary.png")
+        read_content = _storage_path("testbucket", "binary.png").read_bytes()
 
         with open(test_binary, "rb") as file:
             expected_content = file.read()
@@ -221,8 +224,7 @@ class ObjectsTests(ServerBaseCase):
 
         blob.upload_from_file(test_binary, size=len(content))
 
-        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
-            read_content = pwd.readbytes("testbucket/binary_cr.png")
+        read_content = _storage_path("testbucket", "binary_cr.png").read_bytes()
 
         self.assertEqual(read_content, content)
 
@@ -455,12 +457,30 @@ class ObjectsTests(ServerBaseCase):
         self.assertEqual(download_blob.crc32c, crc32c_hash)
 
     def test_invalid_crc32c_hash(self):
+        # google-cloud-storage 3.x no longer forwards a pre-set invalid crc32c on
+        # upload_from_string; hit the multipart API directly so the server still
+        # validates checksums independently of client library behaviour.
         content = b"Hello World"
-        bucket = self._client.create_bucket("testbucket")
-        blob = bucket.blob("hashtest")
-        blob.crc32c = "deadbeef"
-        with self.assertRaises(BadRequest):
-            blob.upload_from_string(content)
+        self._client.create_bucket("testbucket")
+        boundary = "===============boundary=="
+        metadata = json.dumps({"name": "hashtest", "crc32c": "deadbeef"})
+        body = (
+            (
+                f"--{boundary}\r\n"
+                "Content-Type: application/json; charset=UTF-8\r\n\r\n"
+                f"{metadata}\r\n"
+                f"--{boundary}\r\n"
+                "Content-Type: application/octet-stream\r\n\r\n"
+            ).encode("utf-8")
+            + content
+            + f"\r\n--{boundary}--\r\n".encode("utf-8")
+        )
+        response = self._session.post(
+            "http://localhost:9023/upload/storage/v1/b/testbucket/o?uploadType=multipart",
+            data=body,
+            headers={"Content-Type": f"multipart/related; boundary={boundary}"},
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_download_binary_to_file(self):
         test_binary = os.path.join(
@@ -498,12 +518,12 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.blob("canttouchme.txt")
         blob.upload_from_string("File content")
 
-        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
-            self.assertTrue(pwd.exists("bucket_name/canttouchme.txt"))
-            blob.delete()
+        path = _storage_path("bucket_name", "canttouchme.txt")
+        self.assertTrue(path.exists())
+        blob.delete()
 
-            self.assertIsNone(bucket.get_blob("cantouchme.txt"))
-            self.assertFalse(pwd.exists("bucket_name/canttouchme.txt"))
+        self.assertIsNone(bucket.get_blob("cantouchme.txt"))
+        self.assertFalse(path.exists())
 
     def test_delete_nonexistent_object(self):
         bucket = self._client.create_bucket("bucket_name")
@@ -517,9 +537,10 @@ class ObjectsTests(ServerBaseCase):
         blob = bucket.blob("this/is/a/nested/file.txt")
         blob.upload_from_string("Not even joking!")
 
-        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
-            read_content = pwd.readtext("bucket_name/this/is/a/nested/file.txt")
-            self.assertEqual(read_content, "Not even joking!")
+        read_content = _storage_path(
+            "bucket_name", "this", "is", "a", "nested", "file.txt"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(read_content, "Not even joking!")
 
     def test_create_within_multiple_time_does_not_break(self):
         bucket = self._client.create_bucket("bucket_name")
@@ -529,8 +550,11 @@ class ObjectsTests(ServerBaseCase):
         bucket.blob("this/is/another/nested/file.txt")
         blob.upload_from_string("Yet another one")
 
-        with fs.open_fs(os.path.join(STORAGE_BASE, STORAGE_DIR)) as pwd:
-            self.assertTrue(pwd.exists("bucket_name/this/is/a/nested/file.txt"))
+        self.assertTrue(
+            _storage_path(
+                "bucket_name", "this", "is", "a", "nested", "file.txt"
+            ).exists()
+        )
 
     def _assert_blob_list(self, expected, actual):
         self.assertEqual([b.name for b in expected], [b.name for b in actual])

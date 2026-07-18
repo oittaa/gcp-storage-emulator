@@ -1,6 +1,8 @@
 [flake8]
 max-complexity = 10
 max-line-length = 127
+# E203 conflicts with black's slice formatting (e.g. x[1 :])
+extend-ignore = E203
 exclude =
     .git,
     .venv,
