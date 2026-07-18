@@ -782,6 +782,47 @@ class ObjectsTests(ServerBaseCase):
         with self.assertRaises(NotFound):
             self._client.get_bucket("batchbucket2")
 
+    def test_batch_copy_same_bucket(self):
+        bucket = self._client.create_bucket("batchbucket")
+        source = []
+        target = []
+        for i in range(2):
+            source.append(bucket.blob("a/{}.txt".format(i)))
+            source[-1].upload_from_string("text {}".format(i))
+            target.append(bucket.blob("b/{}.txt".format(i)))
+
+        with self._client.batch():
+            for i in range(2):
+                bucket.copy_blob(source[i], bucket, target[i].name)
+
+        blobs = list(self._client.list_blobs(bucket))
+        self._assert_blob_list(source + target, blobs)
+        for i in range(2):
+            self.assertEqual(
+                bucket.get_blob(target[i].name).download_as_bytes(),
+                "text {}".format(i).encode("utf-8"),
+            )
+
+    def test_batch_copy_cross_bucket(self):
+        src_bucket = self._client.create_bucket("batchsrc")
+        dst_bucket = self._client.create_bucket("batchdst")
+        source = src_bucket.blob("nested/file.txt")
+        source.upload_from_string("cross-bucket-payload")
+
+        with self._client.batch():
+            src_bucket.copy_blob(source, dst_bucket, "copied/file.txt")
+
+        copied = dst_bucket.get_blob("copied/file.txt")
+        self.assertIsNotNone(copied)
+        self.assertEqual(copied.download_as_bytes(), b"cross-bucket-payload")
+
+    def test_batch_copy_nonexistent_source(self):
+        bucket = self._client.create_bucket("batchbucket")
+        missing = bucket.blob("does-not-exist.txt")
+        with self.assertRaises(NotFound):
+            with self._client.batch():
+                bucket.copy_blob(missing, bucket, "dest.txt")
+
     def test_resumable_upload_small_chunk_size(self):
         content = b"a" * 10000000
         bucket = self._client.create_bucket("testbucket")

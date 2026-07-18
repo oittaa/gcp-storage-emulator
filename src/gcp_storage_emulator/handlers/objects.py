@@ -365,32 +365,42 @@ def ls(request, response, storage, *args, **kwargs):
         response.json({"kind": "storage#object", "prefixes": prefixes, "items": files})
 
 
-def copy(request, response, storage, *args, **kwargs):
-    try:
-        obj = storage.get_file_obj(
-            request.params["bucket_name"], request.params["object_id"]
-        )
-    except NotFound:
-        response.status = HTTPStatus.NOT_FOUND
-        return
+def _copy(base_url, storage, bucket_name, object_id, dest_bucket_name, dest_object_id):
+    """Copy an object. Returns the destination object resource.
 
+    Raises:
+        NotFound: If the source object or destination bucket is missing.
+        Conflict: If checksum validation fails.
+    """
+    obj = storage.get_file_obj(bucket_name, object_id)
     dest_obj = _make_object_resource(
-        request.base_url,
-        request.params["dest_bucket_name"],
-        request.params["dest_object_id"],
+        base_url,
+        dest_bucket_name,
+        dest_object_id,
         obj["contentType"],
         obj["size"],
         obj,
     )
+    file = storage.get_file(bucket_name, object_id)
+    dest_obj = _checksums(file, dest_obj)
+    storage.create_file(
+        dest_bucket_name,
+        dest_object_id,
+        file,
+        dest_obj,
+    )
+    return dest_obj
 
-    file = storage.get_file(request.params["bucket_name"], request.params["object_id"])
+
+def copy(request, response, storage, *args, **kwargs):
     try:
-        dest_obj = _checksums(file, dest_obj)
-        storage.create_file(
+        dest_obj = _copy(
+            request.base_url,
+            storage,
+            request.params["bucket_name"],
+            request.params["object_id"],
             request.params["dest_bucket_name"],
             request.params["dest_object_id"],
-            file,
-            dest_obj,
         )
         response.json(dest_obj)
     except NotFound:
@@ -540,6 +550,84 @@ def patch(request, response, storage, *args, **kwargs):
         response.status = HTTPStatus.NOT_FOUND
 
 
+def _batch_write_json(response, status_line, payload):
+    response.write(status_line + "\r\n")
+    response.write("Content-Type: application/json; charset=UTF-8\r\n\r\n")
+    response.write(json.dumps(payload))
+    response.write("\r\n\r\n")
+
+
+def _batch_write_not_found(response, bucket_name, object_id):
+    msg = "No such object: {}/{}".format(bucket_name, object_id)
+    resp_data = deepcopy(NOT_FOUND)
+    resp_data["error"]["message"] = msg
+    resp_data["error"]["errors"][0]["message"] = msg
+    _batch_write_json(response, "HTTP/1.1 404 Not Found", resp_data)
+
+
+def _batch_write_bad_request(response, err):
+    msg = str(err)
+    resp_data = deepcopy(BAD_REQUEST)
+    resp_data["error"]["message"] = msg
+    resp_data["error"]["errors"][0]["message"] = msg
+    _batch_write_json(response, "HTTP/1.1 400 Bad Request", resp_data)
+
+
+def _batch_patch(request, item, storage, bucket_name, object_id, meta, response):
+    resp_data = _patch(storage, bucket_name, object_id, meta)
+    if not resp_data:
+        return False
+    _batch_write_json(response, "HTTP/1.1 200 OK", resp_data)
+    return True
+
+
+def _batch_delete(request, item, storage, bucket_name, object_id, meta, response):
+    if object_id:
+        ok = _delete(storage, bucket_name, object_id)
+    else:
+        try:
+            storage.delete_bucket(bucket_name)
+            ok = True
+        except (Conflict, NotFound):
+            ok = False
+    if not ok:
+        return False
+    response.write("HTTP/1.1 204 No Content\r\n")
+    response.write("Content-Type: application/json; charset=UTF-8\r\n\r\n")
+    return True
+
+
+def _batch_post(request, item, storage, bucket_name, object_id, meta, response):
+    """Handle batched POST. Only objects.copy (copyTo) is supported here."""
+    dest_bucket_name = item.get("dest_bucket_name")
+    dest_object_id = item.get("dest_object_id")
+    if not object_id or not dest_bucket_name or not dest_object_id:
+        return False
+    try:
+        dest_obj = _copy(
+            request.base_url,
+            storage,
+            bucket_name,
+            object_id,
+            dest_bucket_name,
+            dest_object_id,
+        )
+    except NotFound:
+        return False
+    except Conflict as err:
+        _batch_write_bad_request(response, err)
+        return True
+    _batch_write_json(response, "HTTP/1.1 200 OK", dest_obj)
+    return True
+
+
+_BATCH_METHOD_HANDLERS = {
+    "PATCH": _batch_patch,
+    "DELETE": _batch_delete,
+    "POST": _batch_post,
+}
+
+
 def batch(request, response, storage, *args, **kwargs):
     boundary = "batch_" + "".join(
         secrets.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits)
@@ -547,39 +635,18 @@ def batch(request, response, storage, *args, **kwargs):
     )
     response["Content-Type"] = "multipart/mixed; boundary={}".format(boundary)
     for item in request.data:
-        resp_data = None
         response.write("--{}\r\nContent-Type: application/http\r\n".format(boundary))
         method = item.get("method")
         bucket_name = item.get("bucket_name")
         object_id = item.get("object_id")
         meta = item.get("meta")
-        if method == "PATCH":
-            resp_data = _patch(storage, bucket_name, object_id, meta)
-            if resp_data:
-                response.write("HTTP/1.1 200 OK\r\n")
-                response.write("Content-Type: application/json; charset=UTF-8\r\n")
-                response.write(json.dumps(resp_data))
-                response.write("\r\n\r\n")
-        if method == "DELETE":
-            if object_id:
-                resp_data = _delete(storage, bucket_name, object_id)
-            else:
-                try:
-                    storage.delete_bucket(bucket_name)
-                    resp_data = True
-                except (Conflict, NotFound):
-                    pass
-            if resp_data:
-                response.write("HTTP/1.1 204 No Content\r\n")
-                response.write("Content-Type: application/json; charset=UTF-8\r\n")
-        if not resp_data:
-            msg = "No such object: {}/{}".format(bucket_name, object_id)
-            resp_data = deepcopy(NOT_FOUND)
-            resp_data["error"]["message"] = msg
-            resp_data["error"]["errors"][0]["message"] = msg
-            response.write("HTTP/1.1 404 Not Found\r\n")
-            response.write("Content-Type: application/json; charset=UTF-8\r\n\r\n")
-            response.write(json.dumps(resp_data))
-            response.write("\r\n\r\n")
+        handler = _BATCH_METHOD_HANDLERS.get(method)
+        handled = False
+        if handler is not None:
+            handled = handler(
+                request, item, storage, bucket_name, object_id, meta, response
+            )
+        if not handled:
+            _batch_write_not_found(response, bucket_name, object_id)
 
     response.write("--{}--".format(boundary))
