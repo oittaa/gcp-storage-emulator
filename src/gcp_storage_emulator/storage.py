@@ -188,6 +188,7 @@ class Storage:
             "buckets": self.buckets,
             "objects": self.objects,
             "resumable": self.resumable,
+            "bucket_iam_policies": self.bucket_iam_policies,
         }
         self._store.write_bytes(".meta", json.dumps(data, indent=2).encode("utf-8"))
 
@@ -198,11 +199,13 @@ class Storage:
             self.buckets = {}
             self.objects = {}
             self.resumable = {}
+            self.bucket_iam_policies = {}
             return
         data = json.loads(raw.decode("utf-8"))
-        self.buckets = data.get("buckets")
-        self.objects = data.get("objects")
-        self.resumable = data.get("resumable")
+        self.buckets = data.get("buckets") or {}
+        self.objects = data.get("objects") or {}
+        self.resumable = data.get("resumable") or {}
+        self.bucket_iam_policies = data.get("bucket_iam_policies") or {}
 
     def _object_path(self, bucket_name, file_name):
         file_name = file_name.replace("\\", "/").lstrip("/")
@@ -508,9 +511,24 @@ class Storage:
             )
 
         del self.buckets[bucket_name]
+        self.bucket_iam_policies.pop(bucket_name, None)
 
         self._delete_dir(bucket_name)
         self._write_config_to_file()
+
+    def get_bucket_iam_policy(self, bucket_name):
+        """Return stored IAM policy for a bucket, or None if bucket missing."""
+        if bucket_name not in self.buckets:
+            return None
+        return self.bucket_iam_policies.get(bucket_name)
+
+    def set_bucket_iam_policy(self, bucket_name, policy):
+        """Store IAM policy for a bucket. Returns False if bucket missing."""
+        if bucket_name not in self.buckets:
+            return False
+        self.bucket_iam_policies[bucket_name] = policy
+        self._write_config_to_file()
+        return True
 
     def delete_file(self, bucket_name, file_name):
         try:
@@ -541,9 +559,11 @@ class Storage:
 
     def wipe(self, keep_buckets=False):
         existing_buckets = self.buckets
+        existing_iam = dict(self.bucket_iam_policies) if keep_buckets else {}
         self.buckets = {}
         self.objects = {}
         self.resumable = {}
+        self.bucket_iam_policies = {}
 
         try:
             self._store.remove_file(".meta")
@@ -558,6 +578,9 @@ class Storage:
         if keep_buckets:
             for bucket_name, bucket_obj in existing_buckets.items():
                 self.create_bucket(bucket_name, bucket_obj)
+                if bucket_name in existing_iam:
+                    self.bucket_iam_policies[bucket_name] = existing_iam[bucket_name]
+            self._write_config_to_file()
 
     def patch_object(self, bucket_name, file_name, file_obj):
         """Patch object

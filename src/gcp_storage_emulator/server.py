@@ -59,6 +59,15 @@ def _json_api_routes(prefix):
             rf"^{p}/b/(?P<bucket_name>[-.\w]+)/defaultObjectAcl$",
             {GET: buckets.default_object_acl_list},
         ),
+        # IAM stubs (#229): more specific paths before /b/{bucket}
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/iam/testPermissions$",
+            {GET: buckets.test_iam_permissions},
+        ),
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/iam$",
+            {GET: buckets.get_iam_policy, PUT: buckets.set_iam_policy},
+        ),
         (
             rf"^{p}/b/(?P<bucket_name>[-.\w]+)$",
             {GET: buckets.get, DELETE: buckets.delete, PATCH: buckets.patch},

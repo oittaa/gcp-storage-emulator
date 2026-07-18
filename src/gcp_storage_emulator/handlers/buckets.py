@@ -218,3 +218,77 @@ def default_object_acl_list(request, response, storage, *args, **kwargs):
         name, bucket.get("defaultObjectAcl") or [], "storage#objectAccessControl"
     )
     response.json({"kind": "storage#objectAccessControls", "items": items})
+
+
+def _default_iam_policy(bucket_name):
+    """Stub default IAM policy (stored only; not enforced)."""
+    return {
+        "kind": "storage#policy",
+        "resourceId": "projects/_/buckets/{}".format(bucket_name),
+        "version": 1,
+        "etag": "CAE=",
+        "bindings": [],
+    }
+
+
+def _policy_response(bucket_name, policy):
+    """Ensure policy response has required GCS fields."""
+    out = dict(policy or {})
+    out["kind"] = "storage#policy"
+    out["resourceId"] = "projects/_/buckets/{}".format(bucket_name)
+    if "version" not in out:
+        out["version"] = 1
+    if "etag" not in out:
+        out["etag"] = "CAE="
+    if "bindings" not in out:
+        out["bindings"] = []
+    return out
+
+
+def get_iam_policy(request, response, storage, *args, **kwargs):
+    """GET /storage/v1/b/{bucket}/iam — store/return only, not enforced (#229)."""
+    name = request.params.get("bucket_name")
+    if not name or name not in storage.buckets:
+        response.status = HTTPStatus.NOT_FOUND
+        return
+    policy = storage.get_bucket_iam_policy(name)
+    if policy is None:
+        policy = _default_iam_policy(name)
+        storage.set_bucket_iam_policy(name, policy)
+    # optionsRequestedPolicyVersion is accepted and ignored (no conditions).
+    response.json(_policy_response(name, policy))
+
+
+def set_iam_policy(request, response, storage, *args, **kwargs):
+    """PUT /storage/v1/b/{bucket}/iam — store policy JSON only (#229)."""
+    name = request.params.get("bucket_name")
+    if not name or name not in storage.buckets:
+        response.status = HTTPStatus.NOT_FOUND
+        return
+    body = request.data if isinstance(request.data, dict) else {}
+    # Keep client bindings/version/etag; fill in resource identity fields.
+    policy = {
+        "kind": "storage#policy",
+        "resourceId": "projects/_/buckets/{}".format(name),
+        "version": body.get("version", 1),
+        "etag": body.get("etag") or "CAI=",
+        "bindings": body.get("bindings") if body.get("bindings") is not None else [],
+    }
+    storage.set_bucket_iam_policy(name, policy)
+    response.json(_policy_response(name, policy))
+
+
+def test_iam_permissions(request, response, storage, *args, **kwargs):
+    """GET /storage/v1/b/{bucket}/iam/testPermissions — stub: allow all requested."""
+    name = request.params.get("bucket_name")
+    if not name or name not in storage.buckets:
+        response.status = HTTPStatus.NOT_FOUND
+        return
+    # Query may repeat permissions=...; parse_qs returns a list.
+    permissions = request.query.get("permissions") or []
+    response.json(
+        {
+            "kind": "storage#testIamPermissionsResponse",
+            "permissions": list(permissions),
+        }
+    )
