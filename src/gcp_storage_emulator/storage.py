@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import shutil
+import time
 from hashlib import sha256
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -17,6 +18,10 @@ from gcp_storage_emulator.settings import (
 
 # Real buckets can't start with an underscore
 RESUMABLE_DIR = "_resumable"
+SOFT_DELETE_DIR = "_softdelete"
+
+# Default soft-delete retention (7 days), matching GCS new-bucket default.
+DEFAULT_SOFT_DELETE_RETENTION_SECONDS = 7 * 24 * 60 * 60
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +202,7 @@ class Storage:
             "objects": self.objects,
             "resumable": self.resumable,
             "bucket_iam_policies": self.bucket_iam_policies,
+            "soft_deleted": self.soft_deleted,
         }
         self._store.write_bytes(".meta", json.dumps(data, indent=2).encode("utf-8"))
 
@@ -208,12 +214,14 @@ class Storage:
             self.objects = {}
             self.resumable = {}
             self.bucket_iam_policies = {}
+            self.soft_deleted = {}
             return
         data = json.loads(raw.decode("utf-8"))
         self.buckets = data.get("buckets") or {}
         self.objects = data.get("objects") or {}
         self.resumable = data.get("resumable") or {}
         self.bucket_iam_policies = data.get("bucket_iam_policies") or {}
+        self.soft_deleted = data.get("soft_deleted") or {}
 
     def _object_path(self, bucket_name, file_name):
         file_name = file_name.replace("\\", "/").lstrip("/")
@@ -241,7 +249,65 @@ class Storage:
 
         return self.buckets.get(bucket_name)
 
-    def get_file_list(self, bucket_name, prefix=None, delimiter=None, match_glob=None):
+    def _soft_delete_content_path(self, bucket_name, file_name, generation):
+        key = sha256(
+            "{}:{}:{}".format(bucket_name, file_name, generation).encode("utf-8")
+        ).hexdigest()
+        return "{}/{}/{}".format(SOFT_DELETE_DIR, bucket_name, key)
+
+    def _bucket_soft_delete_retention_seconds(self, bucket_name):
+        bucket = self.buckets.get(bucket_name) or {}
+        policy = bucket.get("softDeletePolicy") or {}
+        retention = policy.get("retentionDurationSeconds")
+        if retention is None:
+            return DEFAULT_SOFT_DELETE_RETENTION_SECONDS
+        return int(retention)
+
+    def _list_soft_deleted_candidates(self, bucket_name, prefix=None):
+        self._purge_expired_soft_deletes(bucket_name)
+        candidates = []
+        by_name = self.soft_deleted.get(bucket_name, {})
+        for file_name, generations in by_name.items():
+            if prefix is not None and not file_name.startswith(prefix):
+                continue
+            for _gen, file_object in generations.items():
+                candidates.append((file_name, file_object))
+        candidates.sort(key=lambda item: (item[0], int(item[1].get("generation") or 0)))
+        return candidates
+
+    def _list_live_candidates(self, bucket_name, prefix=None):
+        bucket_objects = self.objects.get(bucket_name, {})
+        return [
+            (file_name, file_object)
+            for file_name, file_object in bucket_objects.items()
+            if prefix is None or file_name.startswith(prefix)
+        ]
+
+    def _apply_list_delimiter(self, candidates, prefix, delimiter, match_glob):
+        prefix_len = len(prefix) if prefix else 0
+        objs = []
+        prefixes = set()
+        for file_name, file_object in candidates:
+            rest = file_name[prefix_len:]
+            if delimiter in rest:
+                head, _sep, _tail = rest.partition(delimiter)
+                prefixes.add(file_name[:prefix_len] + head + delimiter)
+            else:
+                objs.append(file_object)
+        if match_glob is not None:
+            prefixes = {
+                folder for folder in prefixes if gcs_glob_match(match_glob, folder)
+            }
+        return objs, prefixes
+
+    def get_file_list(
+        self,
+        bucket_name,
+        prefix=None,
+        delimiter=None,
+        match_glob=None,
+        soft_deleted=False,
+    ):
         """Lists objects in a bucket with optional prefix, delimiter, and matchGlob.
 
         matchGlob follows the GCS objects.list glob syntax:
@@ -250,6 +316,8 @@ class Storage:
         When matchGlob is set, delimiter must be omitted or ``/``. Matching object
         names are returned in items; with delimiter ``/``, matching object prefixes
         are returned in prefixes.
+
+        When soft_deleted is True, only soft-deleted object generations are listed.
         """
 
         if bucket_name not in self.buckets:
@@ -260,12 +328,10 @@ class Storage:
                 "When listing with a glob pattern, the only supported delimiter is '/'."
             )
 
-        bucket_objects = self.objects.get(bucket_name, {})
-        candidates = [
-            (file_name, file_object)
-            for file_name, file_object in bucket_objects.items()
-            if prefix is None or file_name.startswith(prefix)
-        ]
+        if soft_deleted:
+            candidates = self._list_soft_deleted_candidates(bucket_name, prefix)
+        else:
+            candidates = self._list_live_candidates(bucket_name, prefix)
 
         if match_glob is not None:
             candidates = [
@@ -274,24 +340,13 @@ class Storage:
                 if gcs_glob_match(match_glob, file_name)
             ]
 
-        prefix_len = len(prefix) if prefix else 0
-        objs = []
-        prefixes = set()
-
         if delimiter:
-            for file_name, file_object in candidates:
-                rest = file_name[prefix_len:]
-                if delimiter in rest:
-                    head, _sep, _tail = rest.partition(delimiter)
-                    prefixes.add(file_name[:prefix_len] + head + delimiter)
-                else:
-                    objs.append(file_object)
-            if match_glob is not None:
-                prefixes = {
-                    folder for folder in prefixes if gcs_glob_match(match_glob, folder)
-                }
+            objs, prefixes = self._apply_list_delimiter(
+                candidates, prefix, delimiter, match_glob
+            )
         else:
             objs = [file_object for _name, file_object in candidates]
+            prefixes = []
 
         objs.sort(key=lambda obj: obj.get("name") or "")
         return objs, sorted(prefixes)
@@ -520,8 +575,14 @@ class Storage:
 
         del self.buckets[bucket_name]
         self.bucket_iam_policies.pop(bucket_name, None)
+        self.soft_deleted.pop(bucket_name, None)
+        self.objects.pop(bucket_name, None)
 
         self._delete_dir(bucket_name)
+        try:
+            self._store.remove_tree("{}/{}".format(SOFT_DELETE_DIR, bucket_name))
+        except FileNotFoundError:
+            pass
         self._write_config_to_file()
 
     def get_bucket_iam_policy(self, bucket_name):
@@ -538,20 +599,167 @@ class Storage:
         self._write_config_to_file()
         return True
 
-    def delete_file(self, bucket_name, file_name):
+    def _hard_delete_file(self, bucket_name, file_name):
+        """Permanently remove a live object (meta + content)."""
         try:
-            self.objects[bucket_name][file_name]
+            del self.objects[bucket_name][file_name]
         except KeyError:
             raise NotFound(
                 "Object with name '{}' does not exist in bucket '{}'".format(
-                    bucket_name, file_name
+                    file_name, bucket_name
+                )
+            )
+        self._delete_file(bucket_name, file_name)
+        self._write_config_to_file()
+
+    def delete_file(self, bucket_name, file_name):
+        """Delete a live object, applying soft delete when the bucket policy allows."""
+        if bucket_name not in self.buckets:
+            raise NotFound(
+                "Object with name '{}' does not exist in bucket '{}'".format(
+                    file_name, bucket_name
+                )
+            )
+        try:
+            file_obj = self.objects[bucket_name][file_name]
+        except KeyError:
+            raise NotFound(
+                "Object with name '{}' does not exist in bucket '{}'".format(
+                    file_name, bucket_name
                 )
             )
 
-        del self.objects[bucket_name][file_name]
+        retention = self._bucket_soft_delete_retention_seconds(bucket_name)
+        if retention <= 0:
+            self._hard_delete_file(bucket_name, file_name)
+            return
 
+        try:
+            content = self.get_file(bucket_name, file_name, show_error=False)
+        except NotFound:
+            content = b""
+
+        generation = str(file_obj.get("generation") or "0")
+        now = datetime.datetime.now(datetime.timezone.utc)
+        soft_delete_time = now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        hard_delete = now + datetime.timedelta(seconds=retention)
+        hard_delete_time = hard_delete.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+        soft_obj = dict(file_obj)
+        soft_obj["softDeleteTime"] = soft_delete_time
+        soft_obj["hardDeleteTime"] = hard_delete_time
+
+        content_path = self._soft_delete_content_path(
+            bucket_name, file_name, generation
+        )
+        self._store.write_bytes(content_path, content or b"")
+
+        by_name = self.soft_deleted.setdefault(bucket_name, {})
+        by_name.setdefault(file_name, {})[generation] = soft_obj
+
+        del self.objects[bucket_name][file_name]
         self._delete_file(bucket_name, file_name)
         self._write_config_to_file()
+
+    def get_soft_deleted_file_obj(self, bucket_name, file_name, generation):
+        """Return soft-deleted object metadata or raise NotFound."""
+        self._purge_expired_soft_deletes(bucket_name)
+        generation = str(generation)
+        try:
+            return self.soft_deleted[bucket_name][file_name][generation]
+        except KeyError:
+            raise NotFound(
+                "Soft-deleted object '{}/{}' generation {} not found".format(
+                    bucket_name, file_name, generation
+                )
+            )
+
+    def get_soft_deleted_file(self, bucket_name, file_name, generation):
+        """Return soft-deleted object content bytes."""
+        self.get_soft_deleted_file_obj(bucket_name, file_name, generation)
+        generation = str(generation)
+        path = self._soft_delete_content_path(bucket_name, file_name, generation)
+        try:
+            return self._store.read_bytes(path)
+        except FileNotFoundError:
+            return b""
+
+    def restore_soft_deleted_file(self, bucket_name, file_name, generation):
+        """Restore a soft-deleted object to a new live generation.
+
+        Per GCS, the soft-deleted copy is retained until its hard delete time.
+        If a live object with the same name exists, it is soft-deleted first.
+        Returns the new live object resource.
+        """
+        if bucket_name not in self.buckets:
+            raise NotFound
+
+        generation = str(generation)
+        soft_obj = self.get_soft_deleted_file_obj(bucket_name, file_name, generation)
+        content = self.get_soft_deleted_file(bucket_name, file_name, generation)
+
+        # Soft-delete any current live object with this name.
+        if file_name in self.objects.get(bucket_name, {}):
+            self.delete_file(bucket_name, file_name)
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        time_id = time.time_ns()
+        new_obj = dict(soft_obj)
+        new_obj.pop("softDeleteTime", None)
+        new_obj.pop("hardDeleteTime", None)
+        new_obj["generation"] = str(time_id)
+        new_obj["metageneration"] = "1"
+        new_obj["timeCreated"] = now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        new_obj["updated"] = new_obj["timeCreated"]
+        new_obj["id"] = "{}/{}/{}".format(bucket_name, file_name, time_id)
+        if "mediaLink" in new_obj and isinstance(new_obj["mediaLink"], str):
+            # Point mediaLink at the new generation when possible.
+            base = new_obj["mediaLink"].split("?")[0]
+            new_obj["mediaLink"] = "{}?generation={}&alt=media".format(base, time_id)
+
+        self.create_file(bucket_name, file_name, content, new_obj)
+        return new_obj
+
+    def _parse_hard_delete_time(self, hard):
+        if not hard:
+            return None
+        try:
+            hard_dt = datetime.datetime.fromisoformat(hard.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if hard_dt.tzinfo is None:
+            hard_dt = hard_dt.replace(tzinfo=datetime.timezone.utc)
+        return hard_dt
+
+    def _remove_soft_deleted_generation(self, bucket_name, file_name, generation):
+        path = self._soft_delete_content_path(bucket_name, file_name, generation)
+        try:
+            self._store.remove_file(path)
+        except FileNotFoundError:
+            pass
+        by_name = self.soft_deleted.get(bucket_name, {})
+        generations = by_name.get(file_name, {})
+        generations.pop(str(generation), None)
+        if not generations and file_name in by_name:
+            del by_name[file_name]
+        if bucket_name in self.soft_deleted and not self.soft_deleted[bucket_name]:
+            del self.soft_deleted[bucket_name]
+
+    def _purge_expired_soft_deletes(self, bucket_name=None):
+        """Permanently remove soft-deleted objects past hardDeleteTime."""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        buckets = [bucket_name] if bucket_name else list(self.soft_deleted.keys())
+        changed = False
+        for bkt in buckets:
+            by_name = self.soft_deleted.get(bkt, {})
+            for file_name in list(by_name.keys()):
+                for gen, obj in list(by_name.get(file_name, {}).items()):
+                    hard_dt = self._parse_hard_delete_time(obj.get("hardDeleteTime"))
+                    if hard_dt is not None and hard_dt <= now:
+                        self._remove_soft_deleted_generation(bkt, file_name, gen)
+                        changed = True
+        if changed:
+            self._write_config_to_file()
 
     def _delete_file(self, bucket_name, file_name):
         try:
@@ -572,6 +780,7 @@ class Storage:
         self.objects = {}
         self.resumable = {}
         self.bucket_iam_policies = {}
+        self.soft_deleted = {}
 
         try:
             self._store.remove_file(".meta")

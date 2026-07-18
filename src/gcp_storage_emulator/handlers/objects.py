@@ -483,10 +483,38 @@ def upload_partial(request, response, storage, *args, **kwargs):
 def get(request, response, storage, *args, **kwargs):
     if request.query.get("alt") and request.query.get("alt")[0] == "media":
         return download(request, response, storage)
-    try:
-        obj = storage.get_file_obj(
-            request.params["bucket_name"], request.params["object_id"]
+    soft_deleted = False
+    if request.query.get("softDeleted"):
+        soft_deleted = request.query.get("softDeleted")[0].lower() in (
+            "1",
+            "true",
+            "yes",
         )
+    try:
+        if soft_deleted:
+            generation = None
+            if request.query.get("generation"):
+                generation = request.query.get("generation")[0]
+            if generation is None:
+                response.status = HTTPStatus.BAD_REQUEST
+                response.json(
+                    {
+                        "error": {
+                            "code": 400,
+                            "message": "generation is required when softDeleted=true",
+                        }
+                    }
+                )
+                return
+            obj = storage.get_soft_deleted_file_obj(
+                request.params["bucket_name"],
+                request.params["object_id"],
+                generation,
+            )
+        else:
+            obj = storage.get_file_obj(
+                request.params["bucket_name"], request.params["object_id"]
+            )
         response.json(obj)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
@@ -501,16 +529,27 @@ def ls(request, response, storage, *args, **kwargs):
     match_glob = (
         request.query.get("matchGlob")[0] if request.query.get("matchGlob") else None
     )
+    soft_deleted = False
+    if request.query.get("softDeleted"):
+        soft_deleted = request.query.get("softDeleted")[0].lower() in (
+            "1",
+            "true",
+            "yes",
+        )
     try:
         files, prefixes = storage.get_file_list(
-            bucket_name, prefix, delimiter, match_glob
+            bucket_name,
+            prefix,
+            delimiter,
+            match_glob,
+            soft_deleted=soft_deleted,
         )
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
     except BadRequest:
         response.status = HTTPStatus.BAD_REQUEST
     else:
-        response.json({"kind": "storage#object", "prefixes": prefixes, "items": files})
+        response.json({"kind": "storage#objects", "prefixes": prefixes, "items": files})
 
 
 def _copy(base_url, storage, bucket_name, object_id, dest_bucket_name, dest_object_id):
@@ -696,6 +735,31 @@ def download(request, response, storage, *args, **kwargs):
 
 def delete(request, response, storage, *args, **kwargs):
     if not _delete(storage, request.params["bucket_name"], request.params["object_id"]):
+        response.status = HTTPStatus.NOT_FOUND
+
+
+def restore(request, response, storage, *args, **kwargs):
+    """POST .../o/{object}/restore?generation=... — restore a soft-deleted object."""
+    bucket_name = request.params["bucket_name"]
+    object_id = request.params["object_id"]
+    generation = None
+    if request.query.get("generation"):
+        generation = request.query.get("generation")[0]
+    if generation is None:
+        response.status = HTTPStatus.BAD_REQUEST
+        response.json(
+            {
+                "error": {
+                    "code": 400,
+                    "message": "generation query parameter is required",
+                }
+            }
+        )
+        return
+    try:
+        obj = storage.restore_soft_deleted_file(bucket_name, object_id, generation)
+        response.json(obj)
+    except NotFound:
         response.status = HTTPStatus.NOT_FOUND
 
 

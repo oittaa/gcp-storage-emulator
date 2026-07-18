@@ -96,6 +96,11 @@ def _json_api_routes(prefix):
             rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/acl$",
             {GET: objects.acl_list},
         ),
+        # Soft-delete restore: POST .../o/{object}/restore?generation=...
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/restore$",
+            {POST: objects.restore},
+        ),
         (
             rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$",
             {GET: objects.get, DELETE: objects.delete, PATCH: objects.patch},
