@@ -377,7 +377,8 @@ def _finalize_resumable_object(response, storage, obj, data, upload_id):
 
 def _handle_resumable_status(response, storage, upload_id, obj, total):
     received = storage.get_resumable_byte_count(upload_id)
-    if total is not None and received >= total > 0:
+    # total == 0 is a valid empty object (Content-Range: bytes */0).
+    if total is not None and received >= total >= 0:
         data = storage.add_to_resumable_upload(
             upload_id, b"", total_size=total, expected_start=received
         )
