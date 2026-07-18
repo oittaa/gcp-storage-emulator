@@ -601,6 +601,48 @@ class ObjectsTests(ServerBaseCase):
 
         self._assert_blob_list(blobs, [blob_1, blob_2])
 
+    def test_list_blobs_with_match_glob(self):
+        bucket = self._client.create_bucket("bucket_name")
+        for name in ["foo/bar", "foo/baz", "foo/foobar", "foobar"]:
+            bucket.blob(name).upload_from_string("helloworld")
+
+        expected = {
+            "foo*bar": ["foobar"],
+            "foo**bar": ["foo/bar", "foo/foobar", "foobar"],
+            "**/foobar": ["foo/foobar", "foobar"],
+            "*/ba[rz]": ["foo/bar", "foo/baz"],
+            "*/ba[!a-y]": ["foo/baz"],
+            "**/{foobar,baz}": ["foo/baz", "foo/foobar", "foobar"],
+            "foo/{foo*,*baz}": ["foo/baz", "foo/foobar"],
+        }
+        for match_glob, names in expected.items():
+            blobs = list(self._client.list_blobs(bucket, match_glob=match_glob))
+            self.assertEqual([blob.name for blob in blobs], names, match_glob)
+
+    def test_list_blobs_with_match_glob_and_delimiter(self):
+        bucket = self._client.create_bucket("bucket_name")
+        for name in ["all/foo/bar", "foo/baz", "foo/389_bar", "bar", "baz"]:
+            bucket.blob(name).upload_from_string("helloworld")
+
+        expected = {
+            "foo*bar": [],
+            "**/bar": ["bar"],
+            "**ba[rz]": ["bar", "baz"],
+            "*ba[!a-y]": ["baz"],
+            "**/{foobar,baz}": ["baz"],
+            "*{foo*,*baz}": ["baz"],
+        }
+        for match_glob, names in expected.items():
+            blobs = list(
+                self._client.list_blobs(bucket, match_glob=match_glob, delimiter="/")
+            )
+            self.assertEqual([blob.name for blob in blobs], names, match_glob)
+
+    def test_list_blobs_match_glob_wrong_delimiter(self):
+        bucket = self._client.create_bucket("bucket_name")
+        with self.assertRaises(BadRequest):
+            list(self._client.list_blobs(bucket, delimiter="*", match_glob="*.pdf"))
+
     def test_list_blobs_with_prefix_and_delimiter(self):
         bucket = self._client.create_bucket("bucket_name")
 
