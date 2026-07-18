@@ -7,6 +7,7 @@ import sys
 
 from gcp_storage_emulator.handlers.buckets import create_bucket
 from gcp_storage_emulator.server import create_server
+from gcp_storage_emulator.settings import DEFAULT_PROJECT_NUMBER
 from gcp_storage_emulator.storage import Storage
 
 # One after gcloud-task-emulator one
@@ -14,8 +15,22 @@ DEFAULT_PORT = int(os.environ.get("PORT", 9023))
 DEFAULT_HOST = os.environ.get("HOST", "localhost")
 
 
-def get_server(host, port, memory=False, default_bucket=None, data_dir=None):
-    server = create_server(host, port, memory, default_bucket, data_dir=data_dir)
+def get_server(
+    host,
+    port,
+    memory=False,
+    default_bucket=None,
+    data_dir=None,
+    project_number=None,
+):
+    server = create_server(
+        host,
+        port,
+        memory,
+        default_bucket,
+        data_dir=data_dir,
+        project_number=project_number,
+    )
     return server
 
 
@@ -45,6 +60,14 @@ def prepare_args_parser():
     start.add_argument(
         "--default-bucket",
         help="The default bucket. If provided, bucket will be created automatically",
+    )
+    start.add_argument(
+        "--project-number",
+        default=DEFAULT_PROJECT_NUMBER,
+        help=(
+            "Project number reported on bucket resources (default: env "
+            "PROJECT_NUMBER or 1234)"
+        ),
     )
     start.add_argument(
         "-q",
@@ -110,7 +133,12 @@ def main(args=sys.argv[1:], test_mode=False):
     else:
         root.setLevel(logging.DEBUG)
     server = get_server(
-        args.host, args.port, args.no_store_on_disk, args.default_bucket, args.data_dir
+        args.host,
+        args.port,
+        args.no_store_on_disk,
+        args.default_bucket,
+        args.data_dir,
+        project_number=args.project_number,
     )
     if test_mode:
         return server
