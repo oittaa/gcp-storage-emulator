@@ -1008,6 +1008,159 @@ class ObjectsTests(ServerBaseCase):
         fetched = bucket.get_blob("known-total.bin").download_as_bytes()
         self.assertEqual(fetched, content)
 
+    def test_streaming_write_like_node_create_write_stream(self):
+        """Streaming upload via blob.open (Node createWriteStream equivalent, #258)."""
+        content = b"streamed-" + (b"data" * 10000)
+        bucket = self._client.create_bucket("testbucket")
+        blob = bucket.blob("streamed.txt")
+        with blob.open("wb") as writer:
+            # Write in several pieces like a passthrough stream.
+            for i in range(0, len(content), 1024):
+                writer.write(content[i : i + 1024])
+        self.assertEqual(bucket.get_blob("streamed.txt").download_as_bytes(), content)
+
+    def test_resumable_start_with_empty_json_body(self):
+        """Node createWriteStream starts resumable with metadata body `{}`.
+
+        Empty dict is falsy in Python; Request.data must cache it so the body
+        is not re-read from the socket (which hangs the client).
+        """
+        self._client.create_bucket("testbucket")
+        content = b"hello from node-like resumable"
+        start = self._session.post(
+            "http://localhost:9023/upload/storage/v1/b/testbucket/o",
+            params={"name": "node-empty-meta.txt", "uploadType": "resumable"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Upload-Content-Type": "text/plain",
+            },
+            data=b"{}",
+            timeout=5,
+        )
+        self.assertEqual(start.status_code, 200, start.text)
+        location = start.headers.get("Location")
+        self.assertTrue(location, "Location header required for resumable upload")
+
+        # Node single-stream style: bytes START-*/TOTAL with full body.
+        put = self._session.put(
+            location,
+            headers={
+                "Content-Range": "bytes 0-*/{}".format(len(content)),
+                "Content-Type": "text/plain",
+            },
+            data=content,
+            timeout=5,
+        )
+        self.assertEqual(put.status_code, 200, put.text)
+        blob = self._client.bucket("testbucket").get_blob("node-empty-meta.txt")
+        self.assertEqual(blob.download_as_bytes(), content)
+
+    def test_unprefixed_b_json_api_aliases(self):
+        """Node STORAGE_EMULATOR_HOST uses /b/... without /storage/v1.
+
+        @google-cloud/storage sets baseUrl to the emulator host only, so bucket
+        and object calls hit POST /b, GET /b/bucket, GET /b/bucket/o/obj?alt=media.
+        """
+        # Create bucket via unprefixed path (like Node createBucket).
+        created = self._session.post(
+            "http://localhost:9023/b",
+            params={"project": "test-project"},
+            headers={"Content-Type": "application/json"},
+            json={"name": "aliasbucket"},
+            timeout=5,
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["name"], "aliasbucket")
+
+        got = self._session.get("http://localhost:9023/b/aliasbucket", timeout=5)
+        self.assertEqual(got.status_code, 200, got.text)
+        self.assertEqual(got.json()["name"], "aliasbucket")
+
+        content = b"via unprefixed json api"
+        start = self._session.post(
+            "http://localhost:9023/upload/storage/v1/b/aliasbucket/o",
+            params={"name": "alias.txt", "uploadType": "resumable"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Upload-Content-Type": "text/plain",
+            },
+            data=b"{}",
+            timeout=5,
+        )
+        self.assertEqual(start.status_code, 200, start.text)
+        location = start.headers["Location"]
+        put = self._session.put(
+            location,
+            headers={
+                "Content-Range": "bytes 0-*/{}".format(len(content)),
+                "Content-Type": "text/plain",
+            },
+            data=content,
+            timeout=5,
+        )
+        self.assertEqual(put.status_code, 200, put.text)
+
+        # Metadata + media download without /storage/v1 (Node download path).
+        meta = self._session.get(
+            "http://localhost:9023/b/aliasbucket/o/alias.txt", timeout=5
+        )
+        self.assertEqual(meta.status_code, 200, meta.text)
+        self.assertEqual(meta.json()["name"], "alias.txt")
+
+        media = self._session.get(
+            "http://localhost:9023/b/aliasbucket/o/alias.txt",
+            params={"alt": "media"},
+            timeout=5,
+        )
+        self.assertEqual(media.status_code, 200, media.text)
+        self.assertEqual(media.content, content)
+
+        listed = self._session.get("http://localhost:9023/b/aliasbucket/o", timeout=5)
+        self.assertEqual(listed.status_code, 200, listed.text)
+        names = [item["name"] for item in listed.json().get("items", [])]
+        self.assertIn("alias.txt", names)
+
+    def test_upload_without_upload_prefix_does_not_crash(self):
+        """Wrong path /storage/v1/.../o?uploadType= used by some clients (#258).
+
+        Must not raise NoneType; either succeed (compat) or 501.
+        """
+        self._client.create_bucket("testbucket")
+        boundary = "separator_string"
+        body = (
+            f"--{boundary}\r\n"
+            "Content-Type: application/json; charset=UTF-8\r\n\r\n"
+            '{"name":"my-document.txt"}\r\n'
+            f"--{boundary}\r\n"
+            "Content-Type: text/plain\r\n\r\n"
+            "This is a text file.\r\n"
+            f"--{boundary}--\r\n"
+        )
+        # Deliberately omit /upload prefix (as in issue #258 comment).
+        response = self._session.post(
+            "http://localhost:9023/storage/v1/b/testbucket/o?uploadType=multipart",
+            headers={
+                "Content-Type": f"multipart/related; boundary={boundary}",
+            },
+            data=body.encode("utf-8"),
+        )
+        # Compatibility: we accept uploadType on the JSON API objects path.
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "my-document.txt")
+        bucket = self._client.bucket("testbucket")
+        self.assertEqual(
+            bucket.get_blob("my-document.txt").download_as_bytes(),
+            b"This is a text file.",
+        )
+
+    def test_unsupported_method_returns_501_not_none_callable(self):
+        """Path match without method must be 501, not 'NoneType is not callable'."""
+        response = self._session.put(
+            "http://localhost:9023/storage/v1/b/testbucket/o",
+            data=b"nope",
+        )
+        self.assertEqual(response.status_code, 501)
+
     def test_empty_blob(self):
         bucket = self._client.create_bucket("testbucket")
         bucket.blob("empty_blob").open("w").close()

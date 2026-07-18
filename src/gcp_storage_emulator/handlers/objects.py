@@ -309,61 +309,133 @@ def insert(request, response, storage, *args, **kwargs):
         _handle_conflict(response, err)
 
 
+def _parse_resumable_content_range(content_range):
+    """Parse Content-Range used by Python and Node resumable clients.
+
+    Supported forms:
+      bytes START-END/TOTAL
+      bytes START-END/*
+      bytes START-*/TOTAL   (Node single-stream style)
+      bytes START-*/*
+      bytes */TOTAL         (status / empty completion)
+      bytes */*             (status query)
+    """
+    content_range = (content_range or "").strip()
+    patterns = (
+        (
+            r"bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/(?P<total>[0-9]+)",
+            "chunk",
+        ),
+        (
+            r"bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/\*",
+            "chunk",
+        ),
+        (
+            r"bytes (?P<start>[0-9]+)-\*/(?P<total>[0-9]+)",
+            "star_end",
+        ),
+        (
+            r"bytes (?P<start>[0-9]+)-\*/\*",
+            "star_end",
+        ),
+        (
+            r"bytes \*/(?P<total>[0-9]+)",
+            "status",
+        ),
+        (
+            r"bytes \*/\*",
+            "status",
+        ),
+    )
+    for regex, kind in patterns:
+        match = re.fullmatch(regex, content_range)
+        if not match:
+            continue
+        groups = match.groupdict()
+        start = int(groups["start"]) if "start" in groups else None
+        end = int(groups["end"]) if groups.get("end") is not None else None
+        total = int(groups["total"]) if groups.get("total") is not None else None
+        return {"kind": kind, "start": start, "end": end, "total": total}
+    return None
+
+
+def _resumable_incomplete(response, storage, upload_id, fallback_end=0):
+    response.status = GoogleHTTPStatus.RESUME_INCOMPLETE
+    received = storage.get_resumable_byte_count(upload_id)
+    if received > 0:
+        response["Range"] = "bytes=0-{}".format(received - 1)
+    else:
+        response["Range"] = "bytes=0-{}".format(fallback_end)
+
+
+def _finalize_resumable_object(response, storage, obj, data, upload_id):
+    obj = _checksums(data, obj)
+    obj["size"] = str(len(data))
+    storage.create_file(obj["bucket"], obj["name"], data, obj, upload_id)
+    response.json(obj)
+
+
+def _handle_resumable_status(response, storage, upload_id, obj, total):
+    received = storage.get_resumable_byte_count(upload_id)
+    # total == 0 is a valid empty object (Content-Range: bytes */0).
+    if total is not None and received >= total >= 0:
+        data = storage.add_to_resumable_upload(
+            upload_id, b"", total_size=total, expected_start=received
+        )
+        if data is not None:
+            _finalize_resumable_object(response, storage, obj, data, upload_id)
+            return
+    _resumable_incomplete(response, storage, upload_id)
+
+
+def _handle_resumable_chunk(response, storage, upload_id, chunk, parsed):
+    start = parsed["start"]
+    end = parsed["end"]
+    total_size = parsed["total"]
+    # Node single-stream: bytes START-*/TOTAL — body is the remainder.
+    if end is None:
+        end = start + len(chunk) - 1 if chunk else start - 1
+        if total_size is None:
+            total_size = start + len(chunk)
+
+    data = storage.add_to_resumable_upload(
+        upload_id,
+        chunk,
+        total_size=total_size,
+        expected_start=start,
+    )
+    if data is None:
+        _resumable_incomplete(response, storage, upload_id, fallback_end=max(end, 0))
+        return None
+    return data
+
+
 def upload_partial(request, response, storage, *args, **kwargs):
     """Handle resumable upload chunks.
 
     https://cloud.google.com/storage/docs/performing-resumable-uploads
 
-    Content-Range forms used by clients (e.g. google-resumable-media):
-      bytes START-END/TOTAL   — chunk with known total size
-      bytes START-END/*       — chunk while total size is still unknown
-      bytes */TOTAL           — empty finalization / status with known total
     Incomplete chunks must respond with 308 and ``Range: bytes=0-LAST``.
     """
     upload_id = request.query.get("upload_id")[0]
-    content_range = request.get_header("Content-Range", "") or ""
-    known_total = re.fullmatch(
-        r"\s*bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/(?P<total_size>[0-9]+)\s*",
-        content_range,
-    )
-    unknown_total = re.fullmatch(
-        r"\s*bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/\*\s*",
-        content_range,
+    parsed = _parse_resumable_content_range(
+        request.get_header("Content-Range", "") or ""
     )
     try:
         obj = storage.get_resumable_file_obj(upload_id)
-        if known_total or unknown_total:
-            m_dict = (known_total or unknown_total).groupdict()
-            start = int(m_dict["start"])
-            end = int(m_dict["end"])
-            total_size = int(m_dict["total_size"]) if known_total is not None else None
-            chunk = request.data or b""
-            if len(chunk) != end - start + 1:
-                # Tolerate empty edge cases but prefer consistent ranges.
-                pass
-            data = storage.add_to_resumable_upload(
-                upload_id,
-                chunk,
-                total_size=total_size,
-                expected_start=start,
-            )
-            if data is None:
-                # Incomplete: 308 Resume Incomplete with inclusive Range.
-                response.status = GoogleHTTPStatus.RESUME_INCOMPLETE
-                received = storage.get_resumable_byte_count(upload_id)
-                if received > 0:
-                    response["Range"] = "bytes=0-{}".format(received - 1)
-                else:
-                    response["Range"] = "bytes=0-{}".format(end)
-                return
-        else:
-            # Single-shot PUT without multi-chunk Content-Range (entire object).
-            data = request.data or b""
+        chunk = request.data or b""
 
-        obj = _checksums(data, obj)
-        obj["size"] = str(len(data))
-        storage.create_file(obj["bucket"], obj["name"], data, obj, upload_id)
-        response.json(obj)
+        if parsed is None:
+            data = chunk
+        elif parsed["kind"] == "status":
+            _handle_resumable_status(response, storage, upload_id, obj, parsed["total"])
+            return
+        else:
+            data = _handle_resumable_chunk(response, storage, upload_id, chunk, parsed)
+            if data is None:
+                return
+
+        _finalize_resumable_object(response, storage, obj, data, upload_id)
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:

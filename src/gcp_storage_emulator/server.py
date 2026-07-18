@@ -22,6 +22,9 @@ PUT = "PUT"
 DELETE = "DELETE"
 PATCH = "PATCH"
 
+# Sentinel so Request.data can cache falsy bodies (None, {}, b"").
+_UNSET = object()
+
 
 def _wipe_data(req, res, storage):
     keep_buckets = bool(req.query.get("keep-buckets"))
@@ -38,42 +41,50 @@ def _health_check(req, res, storage):
     res.write("OK")
 
 
+def _json_api_routes(prefix):
+    """JSON API object/bucket routes under ``prefix`` (e.g. ``/storage/v1`` or ``""``).
+
+    The empty prefix aliases ``/b/...`` without ``/storage/v1``, which is what the
+    Node ``@google-cloud/storage`` client uses when ``STORAGE_EMULATOR_HOST`` is set
+    (baseUrl becomes the host only, not ``host/storage/v1``).
+    """
+    p = re.escape(prefix) if prefix else ""
+    return (
+        (rf"^{p}/b$", {GET: buckets.ls, POST: buckets.insert}),
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)$",
+            {GET: buckets.get, DELETE: buckets.delete},
+        ),
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o$",
+            {GET: objects.ls},
+        ),
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/copyTo/b/"
+            rf"(?P<dest_bucket_name>[-.\w]+)/o/(?P<dest_object_id>.*[^/]+)$",
+            {POST: objects.copy},
+        ),
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/rewriteTo/b/"
+            rf"(?P<dest_bucket_name>[-.\w]+)/o/(?P<dest_object_id>.*[^/]+)$",
+            {POST: objects.rewrite},
+        ),
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/compose$",
+            {POST: objects.compose},
+        ),
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$",
+            {GET: objects.get, DELETE: objects.delete, PATCH: objects.patch},
+        ),
+    )
+
+
 HANDLERS = (
-    (r"^{}/b$".format(settings.API_ENDPOINT), {GET: buckets.ls, POST: buckets.insert}),
-    (
-        r"^{}/b/(?P<bucket_name>[-.\w]+)$".format(settings.API_ENDPOINT),
-        {GET: buckets.get, DELETE: buckets.delete},
-    ),
-    (
-        r"^{}/b/(?P<bucket_name>[-.\w]+)/o$".format(settings.API_ENDPOINT),
-        {GET: objects.ls},
-    ),
-    (
-        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/copyTo/b/".format(
-            settings.API_ENDPOINT
-        )
-        + r"(?P<dest_bucket_name>[-.\w]+)/o/(?P<dest_object_id>.*[^/]+)$",
-        {POST: objects.copy},
-    ),
-    (
-        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/rewriteTo/b/".format(
-            settings.API_ENDPOINT
-        )
-        + r"(?P<dest_bucket_name>[-.\w]+)/o/(?P<dest_object_id>.*[^/]+)$",
-        {POST: objects.rewrite},
-    ),
-    (
-        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/compose$".format(
-            settings.API_ENDPOINT
-        ),
-        {POST: objects.compose},
-    ),
-    (
-        r"^{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$".format(
-            settings.API_ENDPOINT
-        ),
-        {GET: objects.get, DELETE: objects.delete, PATCH: objects.patch},
-    ),
+    # Canonical GCS JSON API
+    *_json_api_routes(settings.API_ENDPOINT),
+    # Node STORAGE_EMULATOR_HOST style: /b/... without /storage/v1
+    *_json_api_routes(""),
     # Non-default API endpoints
     (
         r"^{}/b/(?P<bucket_name>[-.\w]+)/o$".format(settings.UPLOAD_API_ENDPOINT),
@@ -92,7 +103,9 @@ HANDLERS = (
     # Internal API, not supported by the real GCS
     (r"^/$", {GET: _health_check}),  # Health check endpoint
     (r"^/wipe$", {GET: _wipe_data}),  # Wipe all data
-    # Public file serving, same as object.download and signed URLs
+    # Public file serving, same as object.download and signed URLs.
+    # Must stay after /b aliases so paths like /b/bucket are not treated as
+    # bucket_name=b, object_id=bucket.
     (
         r"^/(?P<bucket_name>[-.\w]+)/(?P<object_id>.*[^/]+)$",
         {GET: objects.download, PUT: objects.xml_upload},
@@ -102,22 +115,25 @@ HANDLERS = (
 # Batch nested request lines look like:
 #   DELETE /storage/v1/b/bucket/o/obj HTTP/1.1
 #   POST http://host/storage/v1/b/src/o/a/copyTo/b/dst/o/b?prettyPrint=false HTTP/1.1
+#   GET /b/bucket/o/obj HTTP/1.1   (Node-style without /storage/v1)
 # More specific patterns (copyTo) must come before generic object paths.
 _API = re.escape(settings.API_ENDPOINT)
+# Optional /storage/v1 so nested batch lines work with either path style.
+_API_OPT = rf"(?:{_API})?"
 _QUERY = r"(?:\?[^\s]*)?"
 _HTTP_VER = r"(?:\s+HTTP/[\d.]+)?"
 BATCH_HANDLERS = (
     (
-        rf"^(?P<method>[\w]+)\s+\S*{_API}/b/(?P<bucket_name>[-.\w]+)/o/"
+        rf"^(?P<method>[\w]+)\s+\S*{_API_OPT}/b/(?P<bucket_name>[-.\w]+)/o/"
         rf"(?P<object_id>[^\s?]+)/copyTo/b/(?P<dest_bucket_name>[-.\w]+)/o/"
         rf"(?P<dest_object_id>[^\s?]+){_QUERY}{_HTTP_VER}$"
     ),
     (
-        rf"^(?P<method>[\w]+)\s+\S*{_API}/b/(?P<bucket_name>[-.\w]+)/o/"
+        rf"^(?P<method>[\w]+)\s+\S*{_API_OPT}/b/(?P<bucket_name>[-.\w]+)/o/"
         rf"(?P<object_id>[^\s?]+){_QUERY}{_HTTP_VER}$"
     ),
     (
-        rf"^(?P<method>[\w]+)\s+\S*{_API}/b/(?P<bucket_name>[-.\w]+)"
+        rf"^(?P<method>[\w]+)\s+\S*{_API_OPT}/b/(?P<bucket_name>[-.\w]+)"
         rf"{_QUERY}{_HTTP_VER}$"
     ),
     r"^Content-Type:\s*(?P<content_type>[-.\w/]+)$",
@@ -155,12 +171,12 @@ def _parse_batch_item(item):
 
 
 def _read_raw_data(request_handler):
-    if request_handler.headers["Content-Length"]:
-        return request_handler.rfile.read(
-            int(request_handler.headers["Content-Length"])
-        )
+    content_length = request_handler.headers.get("Content-Length")
+    if content_length:
+        return request_handler.rfile.read(int(content_length))
 
-    if request_handler.headers["Transfer-Encoding"] == "chunked":
+    transfer_encoding = request_handler.headers.get("Transfer-Encoding")
+    if transfer_encoding and transfer_encoding.lower() == "chunked":
         raw_data = b""
 
         while True:
@@ -182,10 +198,11 @@ def _decode_raw_data(raw_data, request_handler):
     if not raw_data:
         return None
 
-    if request_handler.headers["Content-Encoding"] == "gzip":
+    content_encoding = request_handler.headers.get("Content-Encoding")
+    if content_encoding == "gzip":
         return gzip.decompress(raw_data)
 
-    if request_handler.headers["Content-Encoding"] == "deflate":
+    if content_encoding == "deflate":
         return zlib.decompress(raw_data)
 
     return raw_data
@@ -197,7 +214,9 @@ def _read_data(request_handler, query):
     if not raw_data:
         return None
 
-    content_type = request_handler.headers["Content-Type"] or "application/octet-stream"
+    content_type = (
+        request_handler.headers.get("Content-Type") or "application/octet-stream"
+    )
 
     if content_type.startswith("application/json") and "upload_id" not in query:
         return json.loads(raw_data)
@@ -249,7 +268,9 @@ class Request(object):
         self._parsed_url = urlparse(self._full_url)
         self._query = parse_qs(self._parsed_url.query)
         self._methtod = method
-        self._data = None
+        # Use a sentinel: empty JSON ({}) and missing bodies (None) are falsy, and
+        # re-reading the socket hangs (Node createWriteStream sends metadata as {}).
+        self._data = _UNSET
         self._parsed_params = None
 
     @property
@@ -285,7 +306,7 @@ class Request(object):
 
     @property
     def data(self):
-        if not self._data:
+        if self._data is _UNSET:
             self._data = _read_data(self._request_handler, self._query)
         return self._data
 
@@ -347,8 +368,9 @@ class Router(object):
         self._request_handler = request_handler
 
     def handle(self, method):
-        if self._request_handler.headers["x-http-method-override"]:
-            method = self._request_handler.headers["x-http-method-override"]
+        override = self._request_handler.headers.get("x-http-method-override")
+        if override:
+            method = override
 
         request = Request(self._request_handler, method)
         response = Response(self._request_handler)
@@ -359,6 +381,27 @@ class Router(object):
             if match:
                 request.set_match(match)
                 handler = handlers.get(method)
+                # Some clients POST uploads to .../b/.../o without the /upload prefix
+                # (and optionally without /storage/v1 when using STORAGE_EMULATOR_HOST).
+                if (
+                    handler is None
+                    and method == POST
+                    and request.query.get("uploadType")
+                    and request.path.endswith("/o")
+                    and (
+                        request.path.startswith(settings.API_ENDPOINT + "/b/")
+                        or request.path.startswith("/b/")
+                    )
+                ):
+                    handler = objects.insert
+                if handler is None:
+                    logger.error(
+                        "Method not implemented: {} - {}".format(
+                            request.method, request.path
+                        )
+                    )
+                    response.status = HTTPStatus.NOT_IMPLEMENTED
+                    break
                 try:
                     handler(request, response, self._request_handler.storage)
                 except Exception as e:
