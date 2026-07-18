@@ -1120,6 +1120,63 @@ class ObjectsTests(ServerBaseCase):
         names = [item["name"] for item in listed.json().get("items", [])]
         self.assertIn("alias.txt", names)
 
+    def test_blob_make_public_and_make_private(self):
+        """Python blob.make_public / make_private (issue #204).
+
+        These call GET .../o/{object}/acl then PATCH the object with an acl list
+        that grants or revokes allUsers READER.
+        """
+        bucket = self._client.create_bucket("acl-bucket")
+        blob = bucket.blob("public-me.txt")
+        blob.upload_from_string("hello-acl")
+
+        # Empty ACL list before make_public.
+        listed = self._session.get(
+            "http://localhost:9023/storage/v1/b/acl-bucket/o/public-me.txt/acl",
+            timeout=5,
+        )
+        self.assertEqual(listed.status_code, 200, listed.text)
+        self.assertEqual(listed.json().get("kind"), "storage#objectAccessControls")
+        self.assertEqual(listed.json().get("items"), [])
+
+        blob.make_public()
+        entities = {entry["entity"]: entry["role"] for entry in blob.acl}
+        self.assertEqual(entities.get("allUsers"), "READER")
+
+        # Persist check via raw API.
+        after = self._session.get(
+            "http://localhost:9023/storage/v1/b/acl-bucket/o/public-me.txt/acl",
+            timeout=5,
+        )
+        self.assertEqual(after.status_code, 200, after.text)
+        raw_entities = {
+            item["entity"]: item["role"] for item in after.json().get("items", [])
+        }
+        self.assertEqual(raw_entities.get("allUsers"), "READER")
+
+        blob.make_private()
+        entities_private = {entry["entity"]: entry["role"] for entry in blob.acl}
+        self.assertNotIn("allUsers", entities_private)
+
+        # Content still readable after ACL changes.
+        self.assertEqual(blob.download_as_bytes(), b"hello-acl")
+
+    def test_bucket_make_public(self):
+        """Bucket.make_public uses GET .../acl + PATCH bucket with acl."""
+        bucket = self._client.create_bucket("bucket-acl")
+        blob = bucket.blob("nested.txt")
+        blob.upload_from_string("data")
+
+        bucket.make_public()
+        bucket_entities = {entry["entity"]: entry["role"] for entry in bucket.acl}
+        self.assertEqual(bucket_entities.get("allUsers"), "READER")
+
+        # future=True also touches defaultObjectAcl.
+        bucket2 = self._client.create_bucket("bucket-acl-future")
+        bucket2.make_public(future=True)
+        doa = {entry["entity"]: entry["role"] for entry in bucket2.default_object_acl}
+        self.assertEqual(doa.get("allUsers"), "READER")
+
     def test_upload_without_upload_prefix_does_not_crash(self):
         """Wrong path /storage/v1/.../o?uploadType= used by some clients (#258).
 

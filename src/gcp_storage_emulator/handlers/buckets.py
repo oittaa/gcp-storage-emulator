@@ -32,6 +32,50 @@ BAD_REQUEST = {
 }
 
 
+_WRITABLE_BUCKET_FIELDS = (
+    "acl",
+    "defaultObjectAcl",
+    "cors",
+    "lifecycle",
+    "location",
+    "storageClass",
+    "versioning",
+    "labels",
+    "website",
+    "billing",
+    "iamConfiguration",
+    "encryption",
+    "logging",
+    "retentionPolicy",
+)
+
+
+def _normalize_bucket_acl_entries(bucket_name, entries, kind):
+    """Normalize client ACL entries for bucket or default object ACLs."""
+    normalized = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        entity = entry.get("entity")
+        role = entry.get("role")
+        if not entity or not role:
+            continue
+        item = {
+            "kind": kind,
+            "entity": entity,
+            "role": role,
+            "bucket": bucket_name,
+        }
+        if entry.get("entityId") is not None:
+            item["entityId"] = entry["entityId"]
+        if entry.get("email") is not None:
+            item["email"] = entry["email"]
+        if entry.get("domain") is not None:
+            item["domain"] = entry["domain"]
+        normalized.append(item)
+    return normalized
+
+
 def _make_bucket_resource(bucket_name):
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     return {
@@ -51,7 +95,31 @@ def _make_bucket_resource(bucket_name):
         "locationType": "multi-region",
         "storageClass": "STANDARD",
         "etag": "CAE=",
+        "acl": [],
+        "defaultObjectAcl": [],
     }
+
+
+def _patch_bucket(bucket, metadata):
+    if not metadata:
+        return bucket
+    bucket["metageneration"] = str(int(bucket.get("metageneration", "1")) + 1)
+    name = bucket.get("name")
+    for key in _WRITABLE_BUCKET_FIELDS:
+        val = metadata.get(key)
+        if val is None:
+            continue
+        if key == "acl":
+            bucket[key] = _normalize_bucket_acl_entries(
+                name, val, "storage#bucketAccessControl"
+            )
+        elif key == "defaultObjectAcl":
+            bucket[key] = _normalize_bucket_acl_entries(
+                name, val, "storage#objectAccessControl"
+            )
+        else:
+            bucket[key] = val
+    return bucket
 
 
 def get(request, response, storage, *args, **kwargs):
@@ -112,3 +180,41 @@ def delete(request, response, storage, *args, **kwargs):
         response.status = HTTPStatus.NOT_FOUND
     except Conflict:
         response.status = HTTPStatus.CONFLICT
+
+
+def patch(request, response, storage, *args, **kwargs):
+    """PATCH /storage/v1/b/{bucket} — update metadata including ACLs."""
+    name = request.params.get("bucket_name")
+    bucket = storage.buckets.get(name) if name else None
+    if not bucket:
+        response.status = HTTPStatus.NOT_FOUND
+        return
+    updated = _patch_bucket(bucket, request.data or {})
+    storage.create_bucket(name, updated)
+    response.json(updated)
+
+
+def acl_list(request, response, storage, *args, **kwargs):
+    """GET /storage/v1/b/{bucket}/acl"""
+    name = request.params.get("bucket_name")
+    bucket = storage.buckets.get(name) if name else None
+    if not bucket:
+        response.status = HTTPStatus.NOT_FOUND
+        return
+    items = _normalize_bucket_acl_entries(
+        name, bucket.get("acl") or [], "storage#bucketAccessControl"
+    )
+    response.json({"kind": "storage#bucketAccessControls", "items": items})
+
+
+def default_object_acl_list(request, response, storage, *args, **kwargs):
+    """GET /storage/v1/b/{bucket}/defaultObjectAcl"""
+    name = request.params.get("bucket_name")
+    bucket = storage.buckets.get(name) if name else None
+    if not bucket:
+        response.status = HTTPStatus.NOT_FOUND
+        return
+    items = _normalize_bucket_acl_entries(
+        name, bucket.get("defaultObjectAcl") or [], "storage#objectAccessControl"
+    )
+    response.json({"kind": "storage#objectAccessControls", "items": items})

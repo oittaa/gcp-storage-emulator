@@ -52,8 +52,16 @@ def _json_api_routes(prefix):
     return (
         (rf"^{p}/b$", {GET: buckets.ls, POST: buckets.insert}),
         (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/acl$",
+            {GET: buckets.acl_list},
+        ),
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/defaultObjectAcl$",
+            {GET: buckets.default_object_acl_list},
+        ),
+        (
             rf"^{p}/b/(?P<bucket_name>[-.\w]+)$",
-            {GET: buckets.get, DELETE: buckets.delete},
+            {GET: buckets.get, DELETE: buckets.delete, PATCH: buckets.patch},
         ),
         (
             rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o$",
@@ -72,6 +80,12 @@ def _json_api_routes(prefix):
         (
             rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/compose$",
             {POST: objects.compose},
+        ),
+        # Object ACL list must be registered before the generic object path so
+        # ``.../o/name/acl`` is not treated as object_id ``name/acl``.
+        (
+            rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)/acl$",
+            {GET: objects.acl_list},
         ),
         (
             rf"^{p}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>.*[^/]+)$",
