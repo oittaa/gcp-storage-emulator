@@ -2,7 +2,7 @@ import json
 import os
 from unittest import TestCase as BaseTestCase
 
-from gcp_storage_emulator.exceptions import NotFound
+from gcp_storage_emulator.exceptions import BadRequest, NotFound
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
 from gcp_storage_emulator.storage import Storage
 
@@ -119,6 +119,68 @@ class StorageOSFSTests(BaseTestCase):
             "a_bucket_name", "file_name.png", file_obj
         )
         self.assertNotEqual(file_id_1, file_id_2)
+
+    def test_get_file_list_match_glob(self):
+        content = b"Helloworld"
+        for name in ["foo/bar", "foo/baz", "foo/foobar", "foobar"]:
+            self.storage.create_file(
+                "a_bucket_name",
+                name,
+                content,
+                {"bucket": "a_bucket_name", "name": name},
+            )
+
+        expected = {
+            "foo*bar": ["foobar"],
+            "foo**bar": ["foo/bar", "foo/foobar", "foobar"],
+            "**/foobar": ["foo/foobar", "foobar"],
+            "*/ba[rz]": ["foo/bar", "foo/baz"],
+            "*/ba[!a-y]": ["foo/baz"],
+            "**/{foobar,baz}": ["foo/baz", "foo/foobar", "foobar"],
+            "foo/{foo*,*baz}": ["foo/baz", "foo/foobar"],
+        }
+        for match_glob, names in expected.items():
+            file_objs, prefixes = self.storage.get_file_list(
+                "a_bucket_name", match_glob=match_glob
+            )
+            self.assertEqual([obj["name"] for obj in file_objs], names, match_glob)
+            self.assertEqual(prefixes, [])
+
+    def test_get_file_list_match_glob_with_slash_delimiter(self):
+        content = b"Helloworld"
+        for name in ["all/foo/bar", "foo/baz", "foo/389_bar", "bar", "baz"]:
+            self.storage.create_file(
+                "a_bucket_name",
+                name,
+                content,
+                {"bucket": "a_bucket_name", "name": name},
+            )
+
+        expected = {
+            "foo*bar": [],
+            "**/bar": ["bar"],
+            "**ba[rz]": ["bar", "baz"],
+            "*ba[!a-y]": ["baz"],
+            "**/{foobar,baz}": ["baz"],
+            "*{foo*,*baz}": ["baz"],
+        }
+        for match_glob, names in expected.items():
+            file_objs, _prefixes = self.storage.get_file_list(
+                "a_bucket_name", match_glob=match_glob, delimiter="/"
+            )
+            self.assertEqual([obj["name"] for obj in file_objs], names, match_glob)
+
+    def test_get_file_list_match_glob_rejects_non_slash_delimiter(self):
+        self.storage.create_file(
+            "a_bucket_name",
+            "file.png",
+            b"x",
+            {"bucket": "a_bucket_name", "name": "file.png"},
+        )
+        with self.assertRaises(BadRequest):
+            self.storage.get_file_list(
+                "a_bucket_name", delimiter="*", match_glob="*.png"
+            )
 
     def test_create_file_for_resumable_upload(self):
         test_file = os.path.join(

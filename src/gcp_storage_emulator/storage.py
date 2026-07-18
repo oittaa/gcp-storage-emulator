@@ -7,7 +7,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from gcp_storage_emulator.exceptions import Conflict, NotFound
+from gcp_storage_emulator.exceptions import BadRequest, Conflict, NotFound
+from gcp_storage_emulator.gcs_glob import gcs_glob_match
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
 
 # Real buckets can't start with an underscore
@@ -229,60 +230,60 @@ class Storage:
 
         return self.buckets.get(bucket_name)
 
-    def get_file_list(self, bucket_name, prefix=None, delimiter=None):
-        """Lists all the blobs in the bucket that begin with the prefix.
+    def get_file_list(self, bucket_name, prefix=None, delimiter=None, match_glob=None):
+        """Lists objects in a bucket with optional prefix, delimiter, and matchGlob.
 
-        This can be used to list all blobs in a "folder", e.g. "public/".
+        matchGlob follows the GCS objects.list glob syntax:
+        https://cloud.google.com/storage/docs/json_api/v1/objects/list#list-object-glob
 
-        The delimiter argument can be used to restrict the results to only the
-        "files" in the given "folder". Without the delimiter, the entire tree under
-        the prefix is returned. For example, given these blobs:
-
-            a/1.txt
-            a/b/2.txt
-
-        If you just specify prefix = 'a', you'll get back:
-
-            a/1.txt
-            a/b/2.txt
-
-        However, if you specify prefix='a' and delimiter='/', you'll get back:
-
-            a/1.txt
-
-        Additionally, the same request will return blobs.prefixes populated with:
-
-            a/b/
-
-        Source: https://cloud.google.com/storage/docs/listing-objects#storage-list-objects-python
+        When matchGlob is set, delimiter must be omitted or ``/``. Matching object
+        names are returned in items; with delimiter ``/``, matching object prefixes
+        are returned in prefixes.
         """
 
         if bucket_name not in self.buckets:
             raise NotFound
 
-        prefix_len = 0
-        prefixes = []
+        if match_glob is not None and delimiter is not None and delimiter != "/":
+            raise BadRequest(
+                "When listing with a glob pattern, the only supported delimiter is '/'."
+            )
+
         bucket_objects = self.objects.get(bucket_name, {})
-        if prefix:
-            prefix_len = len(prefix)
-            objs = list(
-                file_object
-                for file_name, file_object in bucket_objects.items()
-                if file_name.startswith(prefix)
-                and (not delimiter or delimiter not in file_name[prefix_len:])
-            )
-        else:
-            objs = list(bucket_objects.values())
+        candidates = [
+            (file_name, file_object)
+            for file_name, file_object in bucket_objects.items()
+            if prefix is None or file_name.startswith(prefix)
+        ]
+
+        if match_glob is not None:
+            candidates = [
+                (file_name, file_object)
+                for file_name, file_object in candidates
+                if gcs_glob_match(match_glob, file_name)
+            ]
+
+        prefix_len = len(prefix) if prefix else 0
+        objs = []
+        prefixes = set()
+
         if delimiter:
-            prefixes = list(
-                file_name[:prefix_len]
-                + file_name[prefix_len:].split(delimiter, 1)[0]
-                + delimiter
-                for file_name in list(bucket_objects)
-                if file_name.startswith(prefix or "")
-                and delimiter in file_name[prefix_len:]
-            )
-        return objs, prefixes
+            for file_name, file_object in candidates:
+                rest = file_name[prefix_len:]
+                if delimiter in rest:
+                    head, _sep, _tail = rest.partition(delimiter)
+                    prefixes.add(file_name[:prefix_len] + head + delimiter)
+                else:
+                    objs.append(file_object)
+            if match_glob is not None:
+                prefixes = {
+                    folder for folder in prefixes if gcs_glob_match(match_glob, folder)
+                }
+        else:
+            objs = [file_object for _name, file_object in candidates]
+
+        objs.sort(key=lambda obj: obj.get("name") or "")
+        return objs, sorted(prefixes)
 
     def create_bucket(self, bucket_name, bucket_obj):
         """Create a bucket object representation and save it to the current fs

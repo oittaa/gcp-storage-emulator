@@ -235,9 +235,16 @@ class Request(object):
         self._path = request_handler.path
         self._request_handler = request_handler
         self._server_address = request_handler.server.server_address
-        self._base_url = "http://{}:{}".format(
-            self._server_address[0], self._server_address[1]
-        )
+        # Prefer the client-facing Host header so resumable upload Location /
+        # mediaLink URLs work in Docker (bind address is often 0.0.0.0).
+        # https://github.com/oittaa/gcp-storage-emulator/issues/210
+        host = request_handler.headers.get("Host")
+        if host:
+            self._base_url = "http://{}".format(host)
+        else:
+            self._base_url = "http://{}:{}".format(
+                self._server_address[0], self._server_address[1]
+            )
         self._full_url = self._base_url + self._path
         self._parsed_url = urlparse(self._full_url)
         self._query = parse_qs(self._parsed_url.query)
