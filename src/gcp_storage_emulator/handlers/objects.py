@@ -227,6 +227,7 @@ def _create_resumable_upload(request, response, storage):
         object_id,
         content_type,
         content_length,
+        metadata={**(request.data or {}), "name": object_id},
     )
     id = storage.create_resumable_upload(
         request.params["bucket_name"],
