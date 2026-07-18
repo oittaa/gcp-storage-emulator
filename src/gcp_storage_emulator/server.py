@@ -155,12 +155,12 @@ def _parse_batch_item(item):
 
 
 def _read_raw_data(request_handler):
-    if request_handler.headers["Content-Length"]:
-        return request_handler.rfile.read(
-            int(request_handler.headers["Content-Length"])
-        )
+    content_length = request_handler.headers.get("Content-Length")
+    if content_length:
+        return request_handler.rfile.read(int(content_length))
 
-    if request_handler.headers["Transfer-Encoding"] == "chunked":
+    transfer_encoding = request_handler.headers.get("Transfer-Encoding")
+    if transfer_encoding and transfer_encoding.lower() == "chunked":
         raw_data = b""
 
         while True:
@@ -182,10 +182,11 @@ def _decode_raw_data(raw_data, request_handler):
     if not raw_data:
         return None
 
-    if request_handler.headers["Content-Encoding"] == "gzip":
+    content_encoding = request_handler.headers.get("Content-Encoding")
+    if content_encoding == "gzip":
         return gzip.decompress(raw_data)
 
-    if request_handler.headers["Content-Encoding"] == "deflate":
+    if content_encoding == "deflate":
         return zlib.decompress(raw_data)
 
     return raw_data
@@ -197,7 +198,9 @@ def _read_data(request_handler, query):
     if not raw_data:
         return None
 
-    content_type = request_handler.headers["Content-Type"] or "application/octet-stream"
+    content_type = (
+        request_handler.headers.get("Content-Type") or "application/octet-stream"
+    )
 
     if content_type.startswith("application/json") and "upload_id" not in query:
         return json.loads(raw_data)
@@ -347,8 +350,9 @@ class Router(object):
         self._request_handler = request_handler
 
     def handle(self, method):
-        if self._request_handler.headers["x-http-method-override"]:
-            method = self._request_handler.headers["x-http-method-override"]
+        override = self._request_handler.headers.get("x-http-method-override")
+        if override:
+            method = override
 
         request = Request(self._request_handler, method)
         response = Response(self._request_handler)
@@ -359,6 +363,23 @@ class Router(object):
             if match:
                 request.set_match(match)
                 handler = handlers.get(method)
+                # Some clients POST uploads to /storage/v1/b/.../o (without /upload).
+                if (
+                    handler is None
+                    and method == POST
+                    and request.query.get("uploadType")
+                    and request.path.startswith(settings.API_ENDPOINT + "/b/")
+                    and request.path.endswith("/o")
+                ):
+                    handler = objects.insert
+                if handler is None:
+                    logger.error(
+                        "Method not implemented: {} - {}".format(
+                            request.method, request.path
+                        )
+                    )
+                    response.status = HTTPStatus.NOT_IMPLEMENTED
+                    break
                 try:
                     handler(request, response, self._request_handler.storage)
                 except Exception as e:
