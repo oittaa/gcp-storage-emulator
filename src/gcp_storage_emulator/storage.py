@@ -2,10 +2,10 @@ import datetime
 import json
 import logging
 import os
+import shutil
 from hashlib import sha256
-
-import fs
-from fs.errors import FileExpected, ResourceNotFound
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 from gcp_storage_emulator.exceptions import Conflict, NotFound
 from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
@@ -16,7 +16,155 @@ RESUMABLE_DIR = "_resumable"
 logger = logging.getLogger(__name__)
 
 
-class Storage(object):
+class _FileStore:
+    """Minimal disk or in-memory store rooted at a logical directory.
+
+    Paths use forward slashes and are relative to the store root (no leading slash).
+    """
+
+    def __init__(self, *, use_memory: bool, root: Optional[Path] = None) -> None:
+        self._use_memory = use_memory
+        if use_memory:
+            self._files: Dict[str, bytes] = {}
+            self._dirs: Set[str] = {""}
+            self._root: Optional[Path] = None
+        else:
+            if root is None:
+                raise ValueError("root is required for disk storage")
+            self._root = root
+            self._root.mkdir(parents=True, exist_ok=True)
+            self._files = {}
+            self._dirs = set()
+
+    @staticmethod
+    def _norm(path: str) -> str:
+        path = path.replace("\\", "/").strip("/")
+        parts = [p for p in path.split("/") if p and p != "."]
+        if any(p == ".." for p in parts):
+            raise ValueError(f"invalid path: {path!r}")
+        return "/".join(parts)
+
+    def _disk_path(self, rel: str) -> Path:
+        assert self._root is not None
+        rel = self._norm(rel)
+        if not rel:
+            return self._root
+        return self._root.joinpath(*rel.split("/"))
+
+    def makedirs(self, rel: str) -> None:
+        rel = self._norm(rel)
+        if self._use_memory:
+            if not rel:
+                return
+            parts = rel.split("/")
+            for i in range(len(parts)):
+                self._dirs.add("/".join(parts[: i + 1]))
+            return
+        self._disk_path(rel).mkdir(parents=True, exist_ok=True)
+
+    def write_bytes(self, rel: str, content: bytes) -> None:
+        rel = self._norm(rel)
+        parent = self._norm(str(Path(rel).parent)) if "/" in rel else ""
+        if parent:
+            self.makedirs(parent)
+        if self._use_memory:
+            if parent:
+                self._dirs.add(parent)
+            self._files[rel] = content
+            return
+        path = self._disk_path(rel)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    def read_bytes(self, rel: str) -> bytes:
+        rel = self._norm(rel)
+        if self._use_memory:
+            try:
+                return self._files[rel]
+            except KeyError as err:
+                raise FileNotFoundError(rel) from err
+        path = self._disk_path(rel)
+        if not path.is_file():
+            raise FileNotFoundError(rel)
+        return path.read_bytes()
+
+    def exists_file(self, rel: str) -> bool:
+        rel = self._norm(rel)
+        if self._use_memory:
+            return rel in self._files
+        return self._disk_path(rel).is_file()
+
+    def remove_file(self, rel: str) -> None:
+        rel = self._norm(rel)
+        if self._use_memory:
+            try:
+                del self._files[rel]
+            except KeyError as err:
+                raise FileNotFoundError(rel) from err
+            return
+        path = self._disk_path(rel)
+        if not path.is_file():
+            raise FileNotFoundError(rel)
+        path.unlink()
+
+    def remove_tree(self, rel: str) -> None:
+        rel = self._norm(rel)
+        if self._use_memory:
+            prefix = f"{rel}/" if rel else ""
+            if (
+                rel
+                and rel not in self._dirs
+                and not any(p == rel or p.startswith(prefix) for p in self._files)
+            ):
+                # match "no folder" semantics for missing trees
+                if not any(p.startswith(prefix) or p == rel for p in self._files):
+                    raise FileNotFoundError(rel)
+            self._files = {
+                p: data
+                for p, data in self._files.items()
+                if not (p == rel or (prefix and p.startswith(prefix)))
+            }
+            self._dirs = {
+                d
+                for d in self._dirs
+                if d != rel and not (prefix and d.startswith(prefix))
+            }
+            self._dirs.add("")
+            return
+        path = self._disk_path(rel)
+        if not path.exists():
+            raise FileNotFoundError(rel)
+        if path.is_file():
+            path.unlink()
+        else:
+            shutil.rmtree(path)
+
+    def listdir(self, rel: str = "") -> List[str]:
+        rel = self._norm(rel)
+        if self._use_memory:
+            prefix = f"{rel}/" if rel else ""
+            names: Set[str] = set()
+            for path in list(self._files) + list(self._dirs):
+                if rel:
+                    if path == rel:
+                        continue
+                    if not path.startswith(prefix):
+                        continue
+                    rest = path[len(prefix) :]
+                else:
+                    rest = path
+                if not rest:
+                    continue
+                names.add(rest.split("/", 1)[0])
+            return sorted(names)
+        path = self._disk_path(rel) if rel else self._root
+        assert path is not None
+        if not path.is_dir():
+            raise FileNotFoundError(rel)
+        return sorted(entry.name for entry in path.iterdir())
+
+
+class Storage:
     def __init__(self, use_memory_fs=False, data_dir=None):
         if not data_dir:
             data_dir = STORAGE_BASE
@@ -25,11 +173,12 @@ class Storage(object):
 
         self._data_dir = data_dir
         self._use_memory_fs = use_memory_fs
-        self._pwd = fs.open_fs(self.get_storage_base())
-        try:
-            self._fs = self._pwd.makedir(STORAGE_DIR)
-        except fs.errors.DirectoryExists:
-            self._fs = self._pwd.opendir(STORAGE_DIR)
+        if use_memory_fs:
+            self._store = _FileStore(use_memory=True)
+        else:
+            os.makedirs(self._data_dir, exist_ok=True)
+            root = Path(self._data_dir) / STORAGE_DIR
+            self._store = _FileStore(use_memory=False, root=root)
 
         self._read_config_from_file()
 
@@ -39,46 +188,34 @@ class Storage(object):
             "objects": self.objects,
             "resumable": self.resumable,
         }
-
-        with self._fs.open(".meta", mode="w") as meta:
-            json.dump(data, meta, indent=2)
+        self._store.write_bytes(".meta", json.dumps(data, indent=2).encode("utf-8"))
 
     def _read_config_from_file(self):
         try:
-            with self._fs.open(".meta", mode="r") as meta:
-                data = json.load(meta)
-                self.buckets = data.get("buckets")
-                self.objects = data.get("objects")
-                self.resumable = data.get("resumable")
-        except ResourceNotFound:
+            raw = self._store.read_bytes(".meta")
+        except FileNotFoundError:
             self.buckets = {}
             self.objects = {}
             self.resumable = {}
+            return
+        data = json.loads(raw.decode("utf-8"))
+        self.buckets = data.get("buckets")
+        self.objects = data.get("objects")
+        self.resumable = data.get("resumable")
 
-    def _get_or_create_dir(self, bucket_name, file_name):
-        try:
-            bucket_dir = self._fs.makedir(bucket_name)
-        except fs.errors.DirectoryExists:
-            bucket_dir = self._fs.opendir(bucket_name)
-
-        dir_name = fs.path.dirname(file_name)
-        return bucket_dir.makedirs(dir_name, recreate=True)
+    def _object_path(self, bucket_name, file_name):
+        file_name = file_name.replace("\\", "/").lstrip("/")
+        return f"{bucket_name}/{file_name}"
 
     def get_storage_base(self):
-        """Returns the pyfilesystem-compatible fs path to the storage
+        """Returns the storage base location (for compatibility).
 
-        This is the OSFS if using disk storage, or "mem://" otherwise.
-        See https://docs.pyfilesystem.org/en/latest/guide.html#opening-filesystems for more info
-
-        Returns:
-            string -- The relevant filesystm
+        Disk mode returns the configured data directory; in-memory mode returns
+        the string ``"memory"``.
         """
-
         if self._use_memory_fs:
-            return "mem://"
-        else:
-            os.makedirs(self._data_dir, exist_ok=True)
-            return self._data_dir
+            return "memory"
+        return self._data_dir
 
     def get_bucket(self, bucket_name):
         """Get the bucket resourec object given the bucket name
@@ -159,6 +296,7 @@ class Storage(object):
         """
 
         self.buckets[bucket_name] = bucket_obj
+        self._store.makedirs(bucket_name)
         self._write_config_to_file()
         return bucket_obj
 
@@ -179,18 +317,14 @@ class Storage(object):
         if bucket_name not in self.buckets:
             raise NotFound
 
-        file_dir = self._get_or_create_dir(bucket_name, file_name)
-
-        base_name = fs.path.basename(file_name)
-        with file_dir.open(base_name, mode="wb") as file:
-            file.write(content)
-            bucket_objects = self.objects.get(bucket_name, {})
-            bucket_objects[file_name] = file_obj
-            self.objects[bucket_name] = bucket_objects
-            if file_id:
-                self.delete_resumable_file_obj(file_id)
-                self._delete_file(RESUMABLE_DIR, self.safe_id(file_id))
-            self._write_config_to_file()
+        self._store.write_bytes(self._object_path(bucket_name, file_name), content)
+        bucket_objects = self.objects.get(bucket_name, {})
+        bucket_objects[file_name] = file_obj
+        self.objects[bucket_name] = bucket_objects
+        if file_id:
+            self.delete_resumable_file_obj(file_id)
+            self._delete_file(RESUMABLE_DIR, self.safe_id(file_id))
+        self._write_config_to_file()
 
     def create_resumable_upload(self, bucket_name, file_name, file_obj):
         """Initiate the necessary data to support partial upload.
@@ -247,9 +381,7 @@ class Storage(object):
         except NotFound:
             file_content = b""
         file_content += content
-        file_dir = self._get_or_create_dir(RESUMABLE_DIR, safe_id)
-        with file_dir.open(safe_id, mode="wb") as file:
-            file.write(file_content)
+        self._store.write_bytes(self._object_path(RESUMABLE_DIR, safe_id), file_content)
         size = len(file_content)
         if size >= total_size:
             return file_content[:total_size]
@@ -308,9 +440,8 @@ class Storage(object):
         """
 
         try:
-            bucket_dir = self._fs.opendir(bucket_name)
-            return bucket_dir.open(file_name, mode="rb").read()
-        except (FileExpected, ResourceNotFound) as e:
+            return self._store.read_bytes(self._object_path(bucket_name, file_name))
+        except (FileNotFoundError, IsADirectoryError, PermissionError) as e:
             if show_error:
                 logger.error("Resource not found:")
                 logger.error(e)
@@ -383,16 +514,14 @@ class Storage(object):
 
     def _delete_file(self, bucket_name, file_name):
         try:
-            with self._fs.opendir(bucket_name) as bucket_dir:
-                bucket_dir.remove(file_name)
-        except ResourceNotFound:
+            self._store.remove_file(self._object_path(bucket_name, file_name))
+        except FileNotFoundError:
             logger.info("No file to remove '{}/{}'".format(bucket_name, file_name))
 
     def _delete_dir(self, path, force=True):
         try:
-            remover = self._fs.removetree if force else self._fs.removedir
-            remover(path)
-        except ResourceNotFound:
+            self._store.remove_tree(path)
+        except FileNotFoundError:
             logger.info("No folder to remove '{}'".format(path))
 
     def wipe(self, keep_buckets=False):
@@ -402,13 +531,13 @@ class Storage(object):
         self.resumable = {}
 
         try:
-            self._fs.remove(".meta")
-        except ResourceNotFound:
+            self._store.remove_file(".meta")
+        except FileNotFoundError:
             pass
         try:
-            for path in self._fs.listdir("."):
-                self._fs.removetree(path)
-        except ResourceNotFound as e:
+            for name in list(self._store.listdir("")):
+                self._store.remove_tree(name)
+        except FileNotFoundError as e:
             logger.warning(e)
 
         if keep_buckets:
