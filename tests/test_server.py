@@ -682,6 +682,45 @@ class ObjectsTests(ServerBaseCase):
         with self.assertRaises(NotFound):
             bucket.rename_blob(blob_1, "c/d.txt")
 
+    def test_blob_rewrite_response_shape(self):
+        """Python client requires totalBytesRewritten/objectSize (issue #305)."""
+        content = b"rewrite-me-please"
+        bucket = self._client.create_bucket("rewrite_bucket")
+        source = bucket.blob("src/file.txt")
+        source.upload_from_string(content)
+
+        dest = bucket.blob("dst/file.txt")
+        token, bytes_rewritten, total_bytes = dest.rewrite(source)
+
+        self.assertIsNone(token)
+        self.assertEqual(bytes_rewritten, len(content))
+        self.assertEqual(total_bytes, len(content))
+        self.assertEqual(dest.download_as_bytes(), content)
+        self.assertEqual(dest.name, "dst/file.txt")
+
+    def test_blob_rewrite_http_response_schema(self):
+        """Raw JSON matches official storage#rewriteResponse fields."""
+        content = b"schema-check"
+        bucket = self._client.create_bucket("rewrite_http")
+        source = bucket.blob("a.txt")
+        source.upload_from_string(content)
+
+        url = (
+            "http://localhost:9023/storage/v1/b/rewrite_http/o/a.txt/"
+            "rewriteTo/b/rewrite_http/o/b.txt"
+        )
+        response = self._session.post(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["kind"], "storage#rewriteResponse")
+        self.assertTrue(data["done"])
+        self.assertEqual(data["totalBytesRewritten"], str(len(content)))
+        self.assertEqual(data["objectSize"], str(len(content)))
+        self.assertNotIn("written", data)
+        self.assertNotIn("size", data)
+        self.assertEqual(data["resource"]["name"], "b.txt")
+        self.assertEqual(data["resource"]["bucket"], "rewrite_http")
+
     def test_compose_create_new_blob(self):
         bucket = self._client.create_bucket("compose_test")
         data_1 = b"AAA\n"
