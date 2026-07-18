@@ -76,13 +76,15 @@ def _normalize_bucket_acl_entries(bucket_name, entries, kind):
     return normalized
 
 
-def _make_bucket_resource(bucket_name):
+def _make_bucket_resource(bucket_name, project_number=None):
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    if project_number is None:
+        project_number = settings.DEFAULT_PROJECT_NUMBER
     return {
         "kind": "storage#bucket",
         "id": bucket_name,
         "selfLink": "{}/b/{}".format(settings.API_ENDPOINT, bucket_name),
-        "projectNumber": "1234",
+        "projectNumber": str(project_number),
         "name": bucket_name,
         "timeCreated": now,
         "updated": now,
@@ -144,7 +146,10 @@ def create_bucket(name, storage):
     if storage.get_bucket(name):
         return False
     else:
-        bucket = _make_bucket_resource(name)
+        project_number = getattr(
+            storage, "project_number", settings.DEFAULT_PROJECT_NUMBER
+        )
+        bucket = _make_bucket_resource(name, project_number=project_number)
         storage.create_bucket(name, bucket)
         return bucket
 
@@ -160,8 +165,6 @@ def insert(request, response, storage, *args, **kwargs):
             response.status = HTTPStatus.CONFLICT
             response.json(CONFLICT)
         else:
-            bucket = _make_bucket_resource(name)
-            storage.create_bucket(name, bucket)
             response.json(bucket)
     else:
         response.status = HTTPStatus.BAD_REQUEST

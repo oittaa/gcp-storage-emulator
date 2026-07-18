@@ -9,7 +9,11 @@ from typing import Dict, List, Optional, Set
 
 from gcp_storage_emulator.exceptions import BadRequest, Conflict, NotFound
 from gcp_storage_emulator.gcs_glob import gcs_glob_match
-from gcp_storage_emulator.settings import STORAGE_BASE, STORAGE_DIR
+from gcp_storage_emulator.settings import (
+    DEFAULT_PROJECT_NUMBER,
+    STORAGE_BASE,
+    STORAGE_DIR,
+)
 
 # Real buckets can't start with an underscore
 RESUMABLE_DIR = "_resumable"
@@ -166,7 +170,7 @@ class _FileStore:
 
 
 class Storage:
-    def __init__(self, use_memory_fs=False, data_dir=None):
+    def __init__(self, use_memory_fs=False, data_dir=None, project_number=None):
         if not data_dir:
             data_dir = STORAGE_BASE
         if not os.path.isabs(data_dir):
@@ -174,6 +178,10 @@ class Storage:
 
         self._data_dir = data_dir
         self._use_memory_fs = use_memory_fs
+        # Used when creating new bucket resources (issue #118).
+        if project_number is None:
+            project_number = DEFAULT_PROJECT_NUMBER
+        self.project_number = str(project_number)
         if use_memory_fs:
             self._store = _FileStore(use_memory=True)
         else:

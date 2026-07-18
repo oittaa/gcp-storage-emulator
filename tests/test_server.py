@@ -175,6 +175,116 @@ class DefaultBucketTests(BaseTestCase):
         self.assertEqual(bucket.storage_class, "STANDARD")
 
 
+class ProjectNumberConfigTests(BaseTestCase):
+    """Configurable projectNumber on bucket resources (issue #118)."""
+
+    def tearDown(self):
+        if getattr(self, "_server", None):
+            self._server.wipe()
+            self._server.stop()
+        return super().tearDown()
+
+    def _start(self, port, **kwargs):
+        self._server = create_server("localhost", port, in_memory=True, **kwargs)
+        self._server.start()
+        self._session = requests.Session()
+        os.environ["STORAGE_EMULATOR_HOST"] = "http://localhost:{}".format(port)
+        from google.cloud import storage
+
+        return storage.Client(
+            project="[PROJECT]",
+            _http=self._session,
+            client_options={"api_endpoint": "http://localhost:{}".format(port)},
+        )
+
+    def test_create_server_project_number_kwarg(self):
+        client = self._start(19051, project_number="987654321012")
+        bucket = client.create_bucket("pn-kwarg-bucket")
+        self.assertEqual(bucket.project_number, 987654321012)
+        # Raw JSON field is a string, same as GCS.
+        raw = self._session.get(
+            "http://localhost:19051/storage/v1/b/pn-kwarg-bucket", timeout=5
+        )
+        self.assertEqual(raw.status_code, 200)
+        self.assertEqual(raw.json()["projectNumber"], "987654321012")
+
+    def test_default_bucket_uses_project_number(self):
+        client = self._start(
+            19052,
+            default_bucket="default-pn.appspot.com",
+            project_number="111222333444",
+        )
+        bucket = client.get_bucket("default-pn.appspot.com")
+        self.assertEqual(bucket.project_number, 111222333444)
+
+    def test_project_number_env_default(self):
+        """PROJECT_NUMBER env is read into settings at import; Storage uses
+        DEFAULT_PROJECT_NUMBER when project_number is omitted.
+
+        We pass the value explicitly via create_server to avoid mutating
+        module globals mid-suite; env is covered by argparse default tests.
+        """
+        from gcp_storage_emulator import settings
+        from gcp_storage_emulator.storage import Storage
+
+        storage = Storage(use_memory_fs=True, project_number=None)
+        self.assertEqual(storage.project_number, str(settings.DEFAULT_PROJECT_NUMBER))
+
+        storage_custom = Storage(use_memory_fs=True, project_number="555666777888")
+        self.assertEqual(storage_custom.project_number, "555666777888")
+
+
+class ProjectNumberCliTests(BaseTestCase):
+    def test_cli_project_number_argument(self):
+        from gcp_storage_emulator.__main__ import prepare_args_parser
+
+        parser, _ = prepare_args_parser()
+        args = parser.parse_args(
+            ["start", "--port=19053", "--project-number=424242424242"]
+        )
+        self.assertEqual(args.project_number, "424242424242")
+
+    def test_cli_project_number_default_from_settings(self):
+        from gcp_storage_emulator.__main__ import prepare_args_parser
+        from gcp_storage_emulator.settings import DEFAULT_PROJECT_NUMBER
+
+        parser, _ = prepare_args_parser()
+        args = parser.parse_args(["start", "--port=19054"])
+        self.assertEqual(args.project_number, DEFAULT_PROJECT_NUMBER)
+
+    def test_settings_default_matches_env_or_1234(self):
+        from gcp_storage_emulator.settings import DEFAULT_PROJECT_NUMBER
+
+        self.assertEqual(
+            DEFAULT_PROJECT_NUMBER, os.environ.get("PROJECT_NUMBER", "1234")
+        )
+
+    def test_main_start_passes_project_number(self):
+        from gcp_storage_emulator.__main__ import main
+
+        server = main(
+            ["start", "--port=19055", "--in-memory", "--project-number=121212121212"],
+            test_mode=True,
+        )
+        try:
+            server.start()
+            self.assertEqual(server._storage.project_number, "121212121212")
+            session = requests.Session()
+            os.environ["STORAGE_EMULATOR_HOST"] = "http://localhost:19055"
+            from google.cloud import storage
+
+            client = storage.Client(
+                project="[PROJECT]",
+                _http=session,
+                client_options={"api_endpoint": "http://localhost:19055"},
+            )
+            bucket = client.create_bucket("cli-pn-bucket")
+            self.assertEqual(bucket.project_number, 121212121212)
+        finally:
+            server.wipe()
+            server.stop()
+
+
 class ObjectsTests(ServerBaseCase):
     def test_upload_from_string(self):
         content = "this is the content of the file\n"
