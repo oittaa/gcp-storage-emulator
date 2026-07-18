@@ -1019,6 +1019,42 @@ class ObjectsTests(ServerBaseCase):
                 writer.write(content[i : i + 1024])
         self.assertEqual(bucket.get_blob("streamed.txt").download_as_bytes(), content)
 
+    def test_resumable_start_with_empty_json_body(self):
+        """Node createWriteStream starts resumable with metadata body `{}`.
+
+        Empty dict is falsy in Python; Request.data must cache it so the body
+        is not re-read from the socket (which hangs the client).
+        """
+        self._client.create_bucket("testbucket")
+        content = b"hello from node-like resumable"
+        start = self._session.post(
+            "http://localhost:9023/upload/storage/v1/b/testbucket/o",
+            params={"name": "node-empty-meta.txt", "uploadType": "resumable"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Upload-Content-Type": "text/plain",
+            },
+            data=b"{}",
+            timeout=5,
+        )
+        self.assertEqual(start.status_code, 200, start.text)
+        location = start.headers.get("Location")
+        self.assertTrue(location, "Location header required for resumable upload")
+
+        # Node single-stream style: bytes START-*/TOTAL with full body.
+        put = self._session.put(
+            location,
+            headers={
+                "Content-Range": "bytes 0-*/{}".format(len(content)),
+                "Content-Type": "text/plain",
+            },
+            data=content,
+            timeout=5,
+        )
+        self.assertEqual(put.status_code, 200, put.text)
+        blob = self._client.bucket("testbucket").get_blob("node-empty-meta.txt")
+        self.assertEqual(blob.download_as_bytes(), content)
+
     def test_upload_without_upload_prefix_does_not_crash(self):
         """Wrong path /storage/v1/.../o?uploadType= used by some clients (#258).
 

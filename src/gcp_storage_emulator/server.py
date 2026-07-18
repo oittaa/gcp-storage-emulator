@@ -22,6 +22,9 @@ PUT = "PUT"
 DELETE = "DELETE"
 PATCH = "PATCH"
 
+# Sentinel so Request.data can cache falsy bodies (None, {}, b"").
+_UNSET = object()
+
 
 def _wipe_data(req, res, storage):
     keep_buckets = bool(req.query.get("keep-buckets"))
@@ -252,7 +255,9 @@ class Request(object):
         self._parsed_url = urlparse(self._full_url)
         self._query = parse_qs(self._parsed_url.query)
         self._methtod = method
-        self._data = None
+        # Use a sentinel: empty JSON ({}) and missing bodies (None) are falsy, and
+        # re-reading the socket hangs (Node createWriteStream sends metadata as {}).
+        self._data = _UNSET
         self._parsed_params = None
 
     @property
@@ -288,7 +293,7 @@ class Request(object):
 
     @property
     def data(self):
-        if not self._data:
+        if self._data is _UNSET:
             self._data = _read_data(self._request_handler, self._query)
         return self._data
 
