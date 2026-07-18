@@ -1055,6 +1055,73 @@ class ObjectsTests(ServerBaseCase):
         blob = self._client.bucket("testbucket").get_blob("node-empty-meta.txt")
         self.assertEqual(blob.download_as_bytes(), content)
 
+    def test_unprefixed_b_json_api_aliases(self):
+        """Node STORAGE_EMULATOR_HOST uses /b/... without /storage/v1.
+
+        @google-cloud/storage sets baseUrl to the emulator host only, so bucket
+        and object calls hit POST /b, GET /b/bucket, GET /b/bucket/o/obj?alt=media.
+        """
+        # Create bucket via unprefixed path (like Node createBucket).
+        created = self._session.post(
+            "http://localhost:9023/b",
+            params={"project": "test-project"},
+            headers={"Content-Type": "application/json"},
+            json={"name": "aliasbucket"},
+            timeout=5,
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["name"], "aliasbucket")
+
+        got = self._session.get("http://localhost:9023/b/aliasbucket", timeout=5)
+        self.assertEqual(got.status_code, 200, got.text)
+        self.assertEqual(got.json()["name"], "aliasbucket")
+
+        content = b"via unprefixed json api"
+        start = self._session.post(
+            "http://localhost:9023/upload/storage/v1/b/aliasbucket/o",
+            params={"name": "alias.txt", "uploadType": "resumable"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Upload-Content-Type": "text/plain",
+            },
+            data=b"{}",
+            timeout=5,
+        )
+        self.assertEqual(start.status_code, 200, start.text)
+        location = start.headers["Location"]
+        put = self._session.put(
+            location,
+            headers={
+                "Content-Range": "bytes 0-*/{}".format(len(content)),
+                "Content-Type": "text/plain",
+            },
+            data=content,
+            timeout=5,
+        )
+        self.assertEqual(put.status_code, 200, put.text)
+
+        # Metadata + media download without /storage/v1 (Node download path).
+        meta = self._session.get(
+            "http://localhost:9023/b/aliasbucket/o/alias.txt", timeout=5
+        )
+        self.assertEqual(meta.status_code, 200, meta.text)
+        self.assertEqual(meta.json()["name"], "alias.txt")
+
+        media = self._session.get(
+            "http://localhost:9023/b/aliasbucket/o/alias.txt",
+            params={"alt": "media"},
+            timeout=5,
+        )
+        self.assertEqual(media.status_code, 200, media.text)
+        self.assertEqual(media.content, content)
+
+        listed = self._session.get(
+            "http://localhost:9023/b/aliasbucket/o", timeout=5
+        )
+        self.assertEqual(listed.status_code, 200, listed.text)
+        names = [item["name"] for item in listed.json().get("items", [])]
+        self.assertIn("alias.txt", names)
+
     def test_upload_without_upload_prefix_does_not_crash(self):
         """Wrong path /storage/v1/.../o?uploadType= used by some clients (#258).
 
