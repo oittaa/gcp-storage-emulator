@@ -538,6 +538,16 @@ def download(request, response, storage, *args, **kwargs):
                 "response-content-disposition"
             ][0]
 
+        # Custom metadata is returned as x-goog-meta-* response headers on GET/HEAD.
+        # https://cloud.google.com/storage/docs/metadata#custom-metadata
+        # https://cloud.google.com/storage/docs/xml-api/reference-headers#xgoogmeta
+        custom_metadata = obj.get("metadata") or {}
+        if isinstance(custom_metadata, dict):
+            for key, value in custom_metadata.items():
+                if value is None:
+                    continue
+                response["x-goog-meta-{}".format(key)] = str(value)
+
         response.write_file(file, content_type=obj.get("contentType"))
     except NotFound:
         response.status = HTTPStatus.NOT_FOUND
