@@ -285,6 +285,81 @@ class ProjectNumberCliTests(BaseTestCase):
             server.stop()
 
 
+class SoftDeleteTests(ServerBaseCase):
+    """Object soft delete: delete retains, list softDeleted, restore."""
+
+    def test_bucket_default_soft_delete_policy(self):
+        bucket = self._client.create_bucket("sd-policy-bucket")
+        policy = bucket.soft_delete_policy
+        self.assertEqual(policy.retention_duration_seconds, 7 * 24 * 60 * 60)
+
+    def test_delete_soft_deletes_and_restore(self):
+        bucket = self._client.create_bucket("sd-restore-bucket")
+        blob = bucket.blob("keep-me.txt")
+        blob.upload_from_string("soft-delete-payload")
+        generation = blob.generation
+        self.assertIsNotNone(generation)
+
+        blob.delete()
+        # Live object is gone.
+        self.assertIsNone(bucket.get_blob("keep-me.txt"))
+        live_names = [b.name for b in bucket.list_blobs()]
+        self.assertNotIn("keep-me.txt", live_names)
+
+        # Soft-deleted listing.
+        soft = list(bucket.list_blobs(soft_deleted=True))
+        self.assertEqual(len(soft), 1)
+        self.assertEqual(soft[0].name, "keep-me.txt")
+        self.assertIsNotNone(soft[0].soft_delete_time)
+        self.assertIsNotNone(soft[0].hard_delete_time)
+        self.assertEqual(soft[0].generation, generation)
+
+        # Restore creates a new live object with the same content.
+        restored = bucket.restore_blob("keep-me.txt", generation=generation)
+        self.assertEqual(restored.name, "keep-me.txt")
+        self.assertEqual(restored.download_as_bytes(), b"soft-delete-payload")
+        # New generation after restore.
+        self.assertNotEqual(restored.generation, generation)
+
+        live = bucket.get_blob("keep-me.txt")
+        self.assertIsNotNone(live)
+        self.assertEqual(live.download_as_bytes(), b"soft-delete-payload")
+
+    def test_soft_delete_disabled_hard_deletes(self):
+        bucket = self._client.create_bucket("sd-off-bucket")
+        # Disable soft delete: retention 0.
+        bucket.soft_delete_policy.retention_duration_seconds = 0
+        bucket.patch()
+
+        blob = bucket.blob("gone.txt")
+        blob.upload_from_string("bye")
+        blob.delete()
+
+        self.assertIsNone(bucket.get_blob("gone.txt"))
+        soft = list(bucket.list_blobs(soft_deleted=True))
+        self.assertEqual(soft, [])
+
+    def test_restore_overwrites_live_with_soft_delete(self):
+        bucket = self._client.create_bucket("sd-overwrite-bucket")
+        blob = bucket.blob("obj.txt")
+        blob.upload_from_string("v1")
+        gen1 = blob.generation
+        blob.delete()
+
+        # New live object with same name.
+        blob2 = bucket.blob("obj.txt")
+        blob2.upload_from_string("v2-live")
+
+        restored = bucket.restore_blob("obj.txt", generation=gen1)
+        self.assertEqual(restored.download_as_bytes(), b"v1")
+        # Previous live v2 should now be soft-deleted.
+        soft = list(bucket.list_blobs(soft_deleted=True))
+        soft_contents_gens = {b.generation for b in soft}
+        # Soft-deleted set includes original gen1 (still retained) and soft-deleted v2.
+        self.assertIn(gen1, soft_contents_gens)
+        self.assertGreaterEqual(len(soft), 2)
+
+
 class ObjectsTests(ServerBaseCase):
     def test_upload_from_string(self):
         content = "this is the content of the file\n"

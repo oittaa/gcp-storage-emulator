@@ -47,6 +47,7 @@ _WRITABLE_BUCKET_FIELDS = (
     "encryption",
     "logging",
     "retentionPolicy",
+    "softDeletePolicy",
 )
 
 
@@ -99,6 +100,11 @@ def _make_bucket_resource(bucket_name, project_number=None):
         "etag": "CAE=",
         "acl": [],
         "defaultObjectAcl": [],
+        # GCS enables soft delete by default (7 days) on new buckets.
+        "softDeletePolicy": {
+            "retentionDurationSeconds": str(7 * 24 * 60 * 60),
+            "effectiveTime": now,
+        },
     }
 
 
