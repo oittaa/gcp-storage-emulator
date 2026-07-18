@@ -364,6 +364,53 @@ class ObjectsTests(ServerBaseCase):
         blob.reload()
         self.assertEqual(blob.metadata, metadata)
 
+    def test_download_includes_x_goog_meta_headers(self):
+        """Custom metadata is returned as x-goog-meta-* on object download (#187)."""
+        content = b"helloworld"
+        bucket = self._client.create_bucket("testbucket")
+        blob = bucket.blob("meta-object")
+        blob.metadata = {"some": "metadata", "Color": "Pink"}
+        blob.upload_from_string(content)
+
+        # JSON API media download path
+        url = (
+            "http://localhost:9023/download/storage/v1/b/testbucket/o/"
+            "meta-object?alt=media"
+        )
+        response = self._session.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, content)
+        # HTTP headers are case-insensitive; requests normalizes to lowercase keys.
+        self.assertEqual(response.headers.get("x-goog-meta-some"), "metadata")
+        self.assertEqual(response.headers.get("x-goog-meta-color"), "Pink")
+
+    def test_public_path_download_includes_x_goog_meta_headers(self):
+        content = b"public-meta"
+        bucket = self._client.create_bucket("testbucket")
+        blob = bucket.blob("public-meta.txt")
+        blob.metadata = {"reviewer": "jane"}
+        blob.upload_from_string(content)
+
+        # Public / signed-URL style path: /{bucket}/{object}
+        response = self._session.get("http://localhost:9023/testbucket/public-meta.txt")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, content)
+        self.assertEqual(response.headers.get("x-goog-meta-reviewer"), "jane")
+
+    def test_download_without_custom_metadata_omits_x_goog_meta_headers(self):
+        content = b"no-meta"
+        bucket = self._client.create_bucket("testbucket")
+        blob = bucket.blob("plain.txt")
+        blob.upload_from_string(content)
+
+        response = self._session.get(
+            "http://localhost:9023/download/storage/v1/b/testbucket/o/plain.txt?alt=media"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            any(name.lower().startswith("x-goog-meta-") for name in response.headers)
+        )
+
     def test_set_custom_time(self):
         content = "The quick brown fox jumps over the lazy dog\n"
         bucket = self._client.create_bucket("testbucket")
