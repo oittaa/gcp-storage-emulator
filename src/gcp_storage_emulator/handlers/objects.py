@@ -443,12 +443,16 @@ def rewrite(request, response, storage, *args, **kwargs):
             file,
             dest_obj,
         )
+        # Official rewrite response schema:
+        # https://cloud.google.com/storage/docs/json_api/v1/objects/rewrite
+        size = str(dest_obj["size"])
         response.json(
             {
-                "resource": dest_obj,
-                "written": dest_obj["size"],
-                "size": dest_obj["size"],
+                "kind": "storage#rewriteResponse",
+                "totalBytesRewritten": size,
+                "objectSize": size,
                 "done": True,
+                "resource": dest_obj,
             }
         )
     except NotFound:
