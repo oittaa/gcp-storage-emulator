@@ -99,12 +99,26 @@ HANDLERS = (
     ),
 )
 
+# Batch nested request lines look like:
+#   DELETE /storage/v1/b/bucket/o/obj HTTP/1.1
+#   POST http://host/storage/v1/b/src/o/a/copyTo/b/dst/o/b?prettyPrint=false HTTP/1.1
+# More specific patterns (copyTo) must come before generic object paths.
+_API = re.escape(settings.API_ENDPOINT)
+_QUERY = r"(?:\?[^\s]*)?"
+_HTTP_VER = r"(?:\s+HTTP/[\d.]+)?"
 BATCH_HANDLERS = (
-    r"^(?P<method>[\w]+).*{}/b/(?P<bucket_name>[-.\w]+)/o/(?P<object_id>[^\?]+[^/])([\?].*)?$".format(
-        settings.API_ENDPOINT
+    (
+        rf"^(?P<method>[\w]+)\s+\S*{_API}/b/(?P<bucket_name>[-.\w]+)/o/"
+        rf"(?P<object_id>[^\s?]+)/copyTo/b/(?P<dest_bucket_name>[-.\w]+)/o/"
+        rf"(?P<dest_object_id>[^\s?]+){_QUERY}{_HTTP_VER}$"
     ),
-    r"^(?P<method>[\w]+).*{}/b/(?P<bucket_name>[-.\w]+)([\?].*)?$".format(
-        settings.API_ENDPOINT
+    (
+        rf"^(?P<method>[\w]+)\s+\S*{_API}/b/(?P<bucket_name>[-.\w]+)/o/"
+        rf"(?P<object_id>[^\s?]+){_QUERY}{_HTTP_VER}$"
+    ),
+    (
+        rf"^(?P<method>[\w]+)\s+\S*{_API}/b/(?P<bucket_name>[-.\w]+)"
+        rf"{_QUERY}{_HTTP_VER}$"
     ),
     r"^Content-Type:\s*(?P<content_type>[-.\w/]+)$",
 )
@@ -121,11 +135,18 @@ def _parse_batch_item(item):
                 content_reached = True
             else:
                 for regex in BATCH_HANDLERS:
-                    pattern = re.compile(regex)
-                    match = pattern.fullmatch(line)
+                    match = re.compile(regex).fullmatch(line)
                     if match:
                         for k, v in match.groupdict().items():
-                            parsed_params[k] = unquote(v)
+                            if v is not None:
+                                parsed_params[k] = unquote(v)
+                        # Prefer the first (most specific) path match; still allow
+                        # later Content-Type lines to be recorded separately.
+                        if (
+                            "method" in match.groupdict()
+                            and "content_type" not in match.groupdict()
+                        ):
+                            break
         else:
             partial_content += line
     if partial_content and parsed_params.get("content_type") == "application/json":
