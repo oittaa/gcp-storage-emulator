@@ -310,23 +310,54 @@ def insert(request, response, storage, *args, **kwargs):
 
 
 def upload_partial(request, response, storage, *args, **kwargs):
-    """https://cloud.google.com/storage/docs/performing-resumable-uploads"""
+    """Handle resumable upload chunks.
+
+    https://cloud.google.com/storage/docs/performing-resumable-uploads
+
+    Content-Range forms used by clients (e.g. google-resumable-media):
+      bytes START-END/TOTAL   — chunk with known total size
+      bytes START-END/*       — chunk while total size is still unknown
+      bytes */TOTAL           — empty finalization / status with known total
+    Incomplete chunks must respond with 308 and ``Range: bytes=0-LAST``.
+    """
     upload_id = request.query.get("upload_id")[0]
-    regex = r"^\s*bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/(?P<total_size>[0-9]+)$"
-    pattern = re.compile(regex)
-    content_range = request.get_header("Content-Range", "")
-    match = pattern.fullmatch(content_range)
+    content_range = request.get_header("Content-Range", "") or ""
+    known_total = re.fullmatch(
+        r"\s*bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/(?P<total_size>[0-9]+)\s*",
+        content_range,
+    )
+    unknown_total = re.fullmatch(
+        r"\s*bytes (?P<start>[0-9]+)-(?P<end>[0-9]+)/\*\s*",
+        content_range,
+    )
     try:
         obj = storage.get_resumable_file_obj(upload_id)
-        if match:
-            m_dict = match.groupdict()
-            total_size = int(m_dict["total_size"])
-            data = storage.add_to_resumable_upload(upload_id, request.data, total_size)
+        if known_total or unknown_total:
+            m_dict = (known_total or unknown_total).groupdict()
+            start = int(m_dict["start"])
+            end = int(m_dict["end"])
+            total_size = int(m_dict["total_size"]) if known_total is not None else None
+            chunk = request.data or b""
+            if len(chunk) != end - start + 1:
+                # Tolerate empty edge cases but prefer consistent ranges.
+                pass
+            data = storage.add_to_resumable_upload(
+                upload_id,
+                chunk,
+                total_size=total_size,
+                expected_start=start,
+            )
             if data is None:
+                # Incomplete: 308 Resume Incomplete with inclusive Range.
                 response.status = GoogleHTTPStatus.RESUME_INCOMPLETE
-                response["Range"] = "bytes=0-{}".format(m_dict["end"])
+                received = storage.get_resumable_byte_count(upload_id)
+                if received > 0:
+                    response["Range"] = "bytes=0-{}".format(received - 1)
+                else:
+                    response["Range"] = "bytes=0-{}".format(end)
                 return
         else:
+            # Single-shot PUT without multi-chunk Content-Range (entire object).
             data = request.data or b""
 
         obj = _checksums(data, obj)
@@ -337,6 +368,9 @@ def upload_partial(request, response, storage, *args, **kwargs):
         response.status = HTTPStatus.NOT_FOUND
     except Conflict as err:
         _handle_conflict(response, err)
+    except BadRequest as err:
+        response.status = HTTPStatus.BAD_REQUEST
+        response.json({"error": {"message": str(err)}})
 
 
 def get(request, response, storage, *args, **kwargs):

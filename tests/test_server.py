@@ -975,6 +975,39 @@ class ObjectsTests(ServerBaseCase):
         self.assertEqual(len(fetched_content), len(content))
         self.assertEqual(fetched_content, content)
 
+    def test_resumable_chunked_write_via_blob_open(self):
+        """Multi-chunk streaming write (issue #301).
+
+        google-resumable-media sends Content-Range: bytes START-END/* until the
+        final chunk, when the total size becomes known. Intermediate chunks must
+        get HTTP 308, not 200.
+        """
+        chunk_size = 256 * 1024
+        # More than two chunks so intermediate /* ranges are used.
+        content = b"x" * (chunk_size * 3 + 123)
+        bucket = self._client.create_bucket("testbucket")
+        blob = bucket.blob("chunked-stream.bin", chunk_size=chunk_size)
+
+        with blob.open("wb", chunk_size=chunk_size) as writer:
+            offset = 0
+            while offset < len(content):
+                writer.write(content[offset : offset + chunk_size])
+                offset += chunk_size
+
+        fetched = bucket.get_blob("chunked-stream.bin").download_as_bytes()
+        self.assertEqual(len(fetched), len(content))
+        self.assertEqual(fetched, content)
+
+    def test_resumable_chunked_known_total_via_upload_from_string(self):
+        """Known-size multi-chunk upload (chunk_size smaller than object)."""
+        chunk_size = 256 * 1024
+        content = b"y" * (chunk_size * 2 + 50)
+        bucket = self._client.create_bucket("testbucket")
+        blob = bucket.blob("known-total.bin", chunk_size=chunk_size)
+        blob.upload_from_string(content)
+        fetched = bucket.get_blob("known-total.bin").download_as_bytes()
+        self.assertEqual(fetched, content)
+
     def test_empty_blob(self):
         bucket = self._client.create_bucket("testbucket")
         bucket.blob("empty_blob").open("w").close()
