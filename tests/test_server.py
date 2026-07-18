@@ -1177,6 +1177,61 @@ class ObjectsTests(ServerBaseCase):
         doa = {entry["entity"]: entry["role"] for entry in bucket2.default_object_acl}
         self.assertEqual(doa.get("allUsers"), "READER")
 
+    def test_bucket_get_and_set_iam_policy(self):
+        """Bucket IAM getIamPolicy / setIamPolicy stubs (issue #229).
+
+        Policies are stored and returned only; permissions are not enforced.
+        """
+        bucket = self._client.create_bucket("iam-bucket")
+
+        # Default empty policy via Python client.
+        policy = bucket.get_iam_policy(requested_policy_version=3)
+        self.assertIsNotNone(policy)
+        self.assertEqual(policy.to_api_repr().get("bindings", []), [])
+
+        # Raw GET also works (and unprefixed /b alias).
+        raw = self._session.get(
+            "http://localhost:9023/storage/v1/b/iam-bucket/iam", timeout=5
+        )
+        self.assertEqual(raw.status_code, 200, raw.text)
+        self.assertEqual(raw.json().get("kind"), "storage#policy")
+        self.assertEqual(raw.json().get("resourceId"), "projects/_/buckets/iam-bucket")
+
+        alias = self._session.get("http://localhost:9023/b/iam-bucket/iam", timeout=5)
+        self.assertEqual(alias.status_code, 200, alias.text)
+
+        # Set a binding and read it back.
+        policy = bucket.get_iam_policy(requested_policy_version=3)
+        policy["roles/storage.objectViewer"] = {"allUsers"}
+        updated = bucket.set_iam_policy(policy)
+        roles = {
+            b["role"]: set(b["members"])
+            for b in updated.to_api_repr().get("bindings", [])
+        }
+        self.assertIn("allUsers", roles.get("roles/storage.objectViewer", set()))
+
+        again = bucket.get_iam_policy(requested_policy_version=3)
+        roles2 = {
+            b["role"]: set(b["members"])
+            for b in again.to_api_repr().get("bindings", [])
+        }
+        self.assertIn("allUsers", roles2.get("roles/storage.objectViewer", set()))
+
+        missing = self._session.get(
+            "http://localhost:9023/storage/v1/b/no-such-bucket/iam", timeout=5
+        )
+        self.assertEqual(missing.status_code, 404)
+
+    def test_bucket_test_iam_permissions_stub(self):
+        """testIamPermissions returns the requested permissions (allow-all stub)."""
+        bucket = self._client.create_bucket("iam-perms-bucket")
+        perms = [
+            "storage.buckets.get",
+            "storage.objects.create",
+        ]
+        allowed = bucket.test_iam_permissions(perms)
+        self.assertEqual(set(allowed), set(perms))
+
     def test_upload_without_upload_prefix_does_not_crash(self):
         """Wrong path /storage/v1/.../o?uploadType= used by some clients (#258).
 
