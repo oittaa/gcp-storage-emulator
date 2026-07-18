@@ -19,6 +19,7 @@ from gcp_storage_emulator.exceptions import BadRequest, Conflict, NotFound
 logger = logging.getLogger("api.object")
 
 _WRITABLE_FIELDS = (
+    "acl",
     "cacheControl",
     "contentDisposition",
     "contentEncoding",
@@ -116,7 +117,12 @@ def _patch_object(obj, metadata):
             if val is not None:
                 if key == "customTime" and obj.get(key) and obj.get(key) > val:
                     continue
-                obj[key] = val
+                if key == "acl":
+                    obj[key] = _normalize_object_acl_entries(
+                        obj.get("bucket"), obj.get("name"), val
+                    )
+                else:
+                    obj[key] = val
     return obj
 
 
@@ -149,9 +155,38 @@ def _make_object_resource(
         ),
         "crc32c": None,
         "etag": None,
+        # Object ACLs (used by blob.make_public / make_private).
+        "acl": [],
     }
     obj = _patch_object(obj, metadata)
     return obj
+
+
+def _normalize_object_acl_entries(bucket_name, object_id, entries):
+    """Normalize client ACL entries to GCS objectAccessControl resources."""
+    normalized = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        entity = entry.get("entity")
+        role = entry.get("role")
+        if not entity or not role:
+            continue
+        item = {
+            "kind": "storage#objectAccessControl",
+            "entity": entity,
+            "role": role,
+            "bucket": bucket_name,
+            "object": object_id,
+        }
+        if entry.get("entityId") is not None:
+            item["entityId"] = entry["entityId"]
+        if entry.get("email") is not None:
+            item["email"] = entry["email"]
+        if entry.get("domain") is not None:
+            item["domain"] = entry["domain"]
+        normalized.append(item)
+    return normalized
 
 
 def _content_type_from_request(request, default=None):
@@ -675,6 +710,28 @@ def patch(request, response, storage, *args, **kwargs):
         response.json(obj)
     else:
         response.status = HTTPStatus.NOT_FOUND
+
+
+def acl_list(request, response, storage, *args, **kwargs):
+    """List object access controls.
+
+    GET /storage/v1/b/{bucket}/o/{object}/acl
+    https://cloud.google.com/storage/docs/json_api/v1/objectAccessControls/list
+    """
+    bucket_name = request.params["bucket_name"]
+    object_id = request.params["object_id"]
+    try:
+        obj = storage.get_file_obj(bucket_name, object_id)
+    except NotFound:
+        response.status = HTTPStatus.NOT_FOUND
+        return
+    items = _normalize_object_acl_entries(bucket_name, object_id, obj.get("acl") or [])
+    response.json(
+        {
+            "kind": "storage#objectAccessControls",
+            "items": items,
+        }
+    )
 
 
 def _batch_write_json(response, status_line, payload):
