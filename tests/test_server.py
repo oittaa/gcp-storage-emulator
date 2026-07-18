@@ -1115,9 +1115,7 @@ class ObjectsTests(ServerBaseCase):
         self.assertEqual(media.status_code, 200, media.text)
         self.assertEqual(media.content, content)
 
-        listed = self._session.get(
-            "http://localhost:9023/b/aliasbucket/o", timeout=5
-        )
+        listed = self._session.get("http://localhost:9023/b/aliasbucket/o", timeout=5)
         self.assertEqual(listed.status_code, 200, listed.text)
         names = [item["name"] for item in listed.json().get("items", [])]
         self.assertIn("alias.txt", names)
