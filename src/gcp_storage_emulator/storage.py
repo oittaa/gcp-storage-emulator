@@ -357,36 +357,50 @@ class Storage:
         self._write_config_to_file()
         return file_id
 
-    def add_to_resumable_upload(self, file_id, content, total_size):
-        """Add data to partial resumable download.
+    def get_resumable_byte_count(self, file_id):
+        """Return how many bytes have been received for a resumable upload so far."""
+        safe_id = self.safe_id(file_id)
+        try:
+            return len(self.get_file(RESUMABLE_DIR, safe_id, False))
+        except NotFound:
+            return 0
 
-        We can't use 'seek' to append since memory store seems to erase
-        everything in those cases. That's why the previous part is loaded
-        and rewritten again.
+    def add_to_resumable_upload(
+        self, file_id, content, total_size=None, expected_start=None
+    ):
+        """Append a chunk to a resumable upload.
 
-         Arguments:
+        Arguments:
             file_id {str} -- Resumable file id
-            content {bytes} -- Content of the file to write
-            total_size {int} -- Total object size
-
-
-        Raises:
-            NotFound: Raised when the object doesn't exist
+            content {bytes} -- Chunk content
+            total_size {int|None} -- Total object size if known; None if still
+                unknown (Content-Range ends with /*)
+            expected_start {int|None} -- Expected start offset (must match
+                current length when provided)
 
         Returns:
-            bytes -- Raw content of the file if completed, None otherwise
+            bytes -- Full object content if the upload is complete, else None
         """
         safe_id = self.safe_id(file_id)
         try:
             file_content = self.get_file(RESUMABLE_DIR, safe_id, False)
         except NotFound:
             file_content = b""
-        file_content += content
+
+        if expected_start is not None and expected_start != len(file_content):
+            raise BadRequest(
+                "Invalid Content-Range start: expected {}, got {}".format(
+                    len(file_content), expected_start
+                )
+            )
+
+        file_content += content or b""
         self._store.write_bytes(self._object_path(RESUMABLE_DIR, safe_id), file_content)
         size = len(file_content)
-        if size >= total_size:
-            return file_content[:total_size]
-        return None
+        # Incomplete while total is unknown, or while we have not received all bytes.
+        if total_size is None or size < total_size:
+            return None
+        return file_content[:total_size]
 
     def get_file_obj(self, bucket_name, file_name):
         """Gets the meta information for a file within a bucket
