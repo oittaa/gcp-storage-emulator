@@ -109,6 +109,27 @@ for blob in bucket.list_blobs():
 server.stop()
 ```
 
+
+## Java
+
+The GCP Java storage api uses the default google apis endpoint and to change it to another host it is necessary
+to alter the default creation of the storage client object.
+
+This is an example targeting localhost on port 9023:
+
+```java
+Storage storage() {
+        return localhostOptions().getService();
+    }
+StorageOptions localhostOptions() {
+        return HttpStorageOptions.newBuilder().setHost("localhost:9023")
+            .setHeaderProvider(UserAgentHeaderProvider(GcpStorageAutoConfiguration.class))
+            .setProjectId("test-project-id")
+            .build();
+    }
+```
+
+
 ## Docker
 
 Pull the Docker image.
